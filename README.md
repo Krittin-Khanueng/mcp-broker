@@ -80,6 +80,189 @@ claude mcp add --transport stdio broker -- bun /path/to/mcp-broker/src/index.ts
 bun test
 ```
 
+## Usage Guide
+
+### Basic: Register and Chat
+
+เปิด 2 Claude Code sessions ในเครื่องเดียวกัน:
+
+**Session A:**
+```
+> "Register as 'alice' and send a message to bob saying 'ready to start'"
+
+# Claude calls: register(name: "alice", role: "peer")
+# Claude calls: send_message(to: "bob", content: "ready to start")
+```
+
+**Session B:**
+```
+> "Register as 'bob' and check for messages"
+
+# Claude calls: register(name: "bob", role: "peer")
+# Claude calls: poll_messages()
+# → receives: {from: "alice", content: "ready to start"}
+```
+
+### Channels: Group Communication
+
+```
+> "Create a channel #code-review for the team"
+# Claude calls: create_channel(name: "#code-review", purpose: "PR reviews")
+
+> "Send to #code-review: PR #42 needs review"
+# Claude calls: send_message(to: "channel:#code-review", content: "PR #42 needs review")
+```
+
+ทุก agent ที่ join channel จะเห็นข้อความเมื่อ poll.
+
+### Broadcast: Announce to Everyone
+
+```
+> "Broadcast to all agents: deployment starting in 5 minutes"
+# Claude calls: send_message(to: "all", content: "deployment starting in 5 minutes")
+```
+
+ทุก agent ที่ online จะได้รับข้อความ.
+
+### Role-Targeted Messaging
+
+```
+> "Send to all workers: new tasks available in #task-queue"
+# Claude calls: send_message(to: "role:worker", content: "new tasks available in #task-queue")
+```
+
+เฉพาะ agents ที่ register ด้วย role `worker` เท่านั้นที่จะได้รับ.
+
+### Coordinator: Parallel Task Execution
+
+ใช้ `broker-coordinator` agent สำหรับงานที่ต้อง fan-out:
+
+```
+> "Use broker-coordinator to review these 3 files in parallel:
+   src/auth.ts, src/api.ts, src/db.ts"
+```
+
+Coordinator จะ:
+1. Register ตัวเองเป็น supervisor
+2. Spawn 3 worker agents
+3. แจก 1 file ให้แต่ละ worker review
+4. รวมผล review กลับมาเป็น summary
+
+### Discovery: Who's Online?
+
+```
+> "List all online agents"
+# Claude calls: list_peers()
+# → [{name: "alice", role: "peer", status: "idle", online: true}, ...]
+
+> "List only workers"
+# Claude calls: list_peers(role: "worker")
+```
+
+`list_peers` ไม่ต้อง register ก่อนก็ใช้ได้ — เหมาะสำหรับ monitoring.
+
+---
+
+## Use Cases
+
+### 1. Parallel Code Review
+
+**สถานการณ์:** มี PR ใหญ่ ต้อง review หลายไฟล์
+
+```
+> "Use broker-coordinator to review PR #123. Split by directory:
+   - src/api/ (REST endpoints)
+   - src/services/ (business logic)
+   - src/models/ (data layer)"
+```
+
+Coordinator spawn 3 workers, แต่ละตัว focus คนละ layer, รวมผลกลับเป็น unified review.
+
+### 2. Long-Running Pipeline
+
+**สถานการณ์:** งานที่ใช้เวลานาน ต้องส่งต่อระหว่าง sessions
+
+**Session 1 (Producer):**
+```
+> "Register as 'pipeline' and post these tasks to #jobs:
+   1. Migrate database schema
+   2. Update API endpoints
+   3. Write integration tests"
+```
+
+**Session 2 (Consumer — อาจเปิดทีหลัง):**
+```
+> "Register as 'worker-1', join #jobs, and pick up the next task"
+# Worker polls #jobs, เห็น task, เริ่มทำงาน
+# ทำเสร็จแล้ว post ผลกลับไป #jobs
+```
+
+Messages persist ใน SQLite — ไม่หายแม้ session เดิมปิดไปแล้ว.
+
+### 3. Cross-Project Coordination
+
+**สถานการณ์:** ทำงาน 2 projects ที่เกี่ยวข้องกัน (เช่น frontend + backend)
+
+**Terminal 1 (`~/frontend`):**
+```
+> "Register as 'frontend-dev'. When the API contract changes,
+   send me a message with the new endpoints."
+```
+
+**Terminal 2 (`~/backend`):**
+```
+> "Register as 'backend-dev'. I just added POST /api/tasks.
+   Send to frontend-dev: 'new endpoint POST /api/tasks added,
+   request body: {title: string, priority: number}'"
+```
+
+ทั้ง 2 projects ใช้ broker.db เดียวกัน — คุยกันข้ามโปรเจกต์ได้.
+
+### 4. Supervisor + Workers Pattern
+
+**สถานการณ์:** ต้องการ 1 agent คอย monitor และ manage workers หลายตัว
+
+```
+> "Register as 'supervisor' with role supervisor.
+   Create channel #status.
+   Poll #status every time you get a chance —
+   if any worker reports 'failed', re-assign their task."
+```
+
+Workers report สถานะเข้า `#status`:
+```
+> "Register as 'worker-1' with role worker.
+   Join #status. Post status updates as you work.
+   When done, send to supervisor: 'task-A complete'."
+```
+
+### 5. Multi-Agent Brainstorm
+
+**สถานการณ์:** ต้องการหลาย perspectives สำหรับ design decision
+
+```
+> "Use broker-coordinator to brainstorm database design.
+   Spawn 3 agents with different perspectives:
+   - Agent 1: optimize for read performance
+   - Agent 2: optimize for write throughput
+   - Agent 3: optimize for simplicity and maintainability
+   Collect all proposals and synthesize the best approach."
+```
+
+### 6. Test Matrix Runner
+
+**สถานการณ์:** run tests หลาย environments พร้อมกัน
+
+```
+> "Use broker-coordinator to run the test suite across configurations:
+   - Node 20 + PostgreSQL 15
+   - Node 22 + PostgreSQL 16
+   - Bun + SQLite
+   Report which combinations pass/fail."
+```
+
+---
+
 ## Tools
 
 ### Registration & Presence
