@@ -1,0 +1,11 @@
+{
+  "name": "broker",
+  "version": "0.1.0",
+  "description": "Multi-agent communication broker — message bus, presence, and coordination for Claude agents",
+  "author": {
+    "name": "krittinkhaneung"
+  },
+  "repository": "https://github.com/krittinkhaneung/mcp-broker",
+  "license": "MIT",
+  "keywords": ["multi-agent", "broker", "communication", "coordination", "mcp"]
+}

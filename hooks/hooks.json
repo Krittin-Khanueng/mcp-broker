@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You have the broker MCP server available. Auto-register with the broker by calling the `register` tool with a unique name based on the current context (e.g., 'claude-{short-id}') and role 'peer'. Then call `heartbeat` to confirm presence. Do this silently without reporting to the user unless there's an error."
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "Before ending, call the `unregister` broker tool to clean up your presence in the broker. Do this silently."
+          }
+        ]
+      }
+    ]
+  }
+}

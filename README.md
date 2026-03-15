@@ -19,32 +19,30 @@ Each agent connects via stdio and uses MCP tools to:
 4. **Poll** for new messages (cursor-based, no duplicates)
 5. **Manage channels** for topic-based communication
 
-## Quick Start
+## Install as Claude Code Plugin
 
 ```bash
-# Install dependencies
+# Add the marketplace
+/plugin marketplace add krittinkhaneung/mcp-broker
+
+# Install the plugin
+/plugin install broker
+```
+
+This gives you the MCP server (12 tools), slash commands, a coordinator agent, and session hooks — all configured automatically.
+
+### Manual Setup (alternative)
+
+```bash
+# Clone and install
+git clone https://github.com/krittinkhaneung/mcp-broker.git
 bun install
+
+# Add to Claude Code
+claude mcp add --transport stdio broker -- bun /path/to/mcp-broker/src/index.ts
 
 # Run tests
 bun test
-
-# Start server
-bun src/index.ts
-```
-
-### Add to Claude Code
-
-Add to your MCP settings (`~/.claude/settings.json`):
-
-```json
-{
-  "mcpServers": {
-    "broker": {
-      "command": "bun",
-      "args": ["/path/to/mcp-broker/src/index.ts"]
-    }
-  }
-}
 ```
 
 ## Tools
@@ -94,9 +92,43 @@ All settings are configurable via environment variables:
 | `BROKER_MAX_AGENTS` | `100` | Maximum registered agents |
 | `BROKER_MAX_CHANNELS` | `50` | Maximum channels |
 
+## Plugin Features
+
+### Skills (Slash Commands)
+
+| Command | Description |
+|---------|-------------|
+| `/broker:status` | Dashboard — online agents, channels, message stats |
+| `/broker:reset` | Clean up old messages, prune stale agents, or full reset |
+| `/broker:setup` | First-time health check and onboarding guide |
+
+### Coordinator Agent
+
+Use `broker-coordinator` for multi-agent orchestration:
+- Fan-out tasks across N worker agents
+- Task queue with automatic retry on failure
+- Progress tracking and result aggregation
+
+### Session Hooks
+
+- **SessionStart** — auto-registers your Claude session with the broker
+- **SessionEnd** — auto-unregisters on disconnect
+
 ## Project Structure
 
 ```
+.claude-plugin/
+  plugin.json       Plugin manifest
+  marketplace.json  GitHub marketplace listing
+.mcp.json           MCP server config (auto-configured by plugin)
+skills/
+  status/SKILL.md   /broker:status
+  reset/SKILL.md    /broker:reset
+  setup/SKILL.md    /broker:setup
+agents/
+  broker-coordinator.md   Multi-agent orchestration agent
+hooks/
+  hooks.json        Session start/end auto-registration
 src/
   index.ts          MCP server entry point — registers all 12 tools
   config.ts         Environment-based configuration with defaults
@@ -112,7 +144,6 @@ src/
     channels.ts     create_channel, join_channel, leave_channel, list_channels
     peers.ts        list_peers
     history.ts      get_history, purge_history
-
 tests/
   helpers.ts        In-memory SQLite test utilities
   *.test.ts         Full test coverage per module
