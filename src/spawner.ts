@@ -81,6 +81,7 @@ export function buildQueryOptions(
     ...(profile.max_budget_usd !== undefined && { maxBudgetUsd: profile.max_budget_usd }),
     ...(workingDir && { cwd: workingDir }),
     ...(resumeSessionId && { resume: resumeSessionId }),
+    ...(profile.setting_sources?.length && { settingSources: profile.setting_sources }),
   };
 
   const prompt = task || 'You are ready to work. Register with the broker and await instructions via poll_messages.';

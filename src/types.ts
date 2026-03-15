@@ -39,6 +39,7 @@ export interface SessionAgent {
 }
 
 export type PermissionMode = 'default' | 'auto' | 'bypassPermissions';
+export type SettingSource = 'user' | 'project' | 'local';
 
 export interface Profile {
   system_prompt: string;
@@ -50,6 +51,7 @@ export interface Profile {
   role: AgentRole;
   working_directory?: string;
   permission_mode: PermissionMode;
+  setting_sources?: SettingSource[];
 }
 
 export interface SpawnedAgent {

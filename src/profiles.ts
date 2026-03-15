@@ -15,6 +15,7 @@ const ProfileSchema = z.object({
   role: z.enum(['peer', 'worker', 'supervisor']).default('worker'),
   working_directory: z.string().optional(),
   permission_mode: z.enum(['default', 'auto', 'bypassPermissions']).default('auto'),
+  setting_sources: z.array(z.enum(['user', 'project', 'local'])).optional(),
 });
 
 const ProfilesFileSchema = z.object({

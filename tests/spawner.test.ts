@@ -129,6 +129,17 @@ describe('buildQueryOptions', () => {
     const { options } = buildQueryOptions('reviewer', baseProfile, '/tmp/test.db');
     expect(options.resume).toBeUndefined();
   });
+
+  it('passes setting_sources when configured', () => {
+    const profile = { ...baseProfile, setting_sources: ['project' as const] };
+    const { options } = buildQueryOptions('reviewer', profile, '/tmp/test.db');
+    expect(options.settingSources).toEqual(['project']);
+  });
+
+  it('omits settingSources when not configured', () => {
+    const { options } = buildQueryOptions('reviewer', baseProfile, '/tmp/test.db');
+    expect(options.settingSources).toBeUndefined();
+  });
 });
 
 let db: Database;
