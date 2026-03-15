@@ -1,5 +1,6 @@
 import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../config.js';
+import type { Profile } from '../types.js';
 import { loadProfiles } from '../profiles.js';
 import { spawnAgent, stopAgent } from '../spawner.js';
 import { requireAgent } from '../state.js';
@@ -21,7 +22,7 @@ export function handleSpawnAgent(
   config: BrokerConfig,
   params: SpawnAgentParams,
 ): Record<string, unknown> {
-  requireAgent();
+  // requireAgent is called inside spawnAgent — no need to duplicate here
 
   const profiles = loadProfiles(config.profilesPath);
   const profile = profiles.get(params.profile);
@@ -37,6 +38,7 @@ export function handleStopAgent(
   config: BrokerConfig,
   params: StopAgentParams,
 ): Record<string, unknown> {
+  requireAgent();
   return stopAgent(db, params.name);
 }
 
@@ -44,11 +46,14 @@ export function handleListProfiles(
   db: Database,
   config: BrokerConfig,
 ): Record<string, unknown> {
-  let profiles: Map<string, any>;
+  let profiles: Map<string, Profile>;
   try {
     profiles = loadProfiles(config.profilesPath);
-  } catch {
-    return { profiles: [] };
+  } catch (e) {
+    if (e instanceof BrokerError && e.code === 'config_not_found') {
+      return { profiles: [] };
+    }
+    throw e;
   }
 
   const result = [];
