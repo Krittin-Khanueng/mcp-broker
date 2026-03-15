@@ -2,6 +2,30 @@
 
 การเปลี่ยนแปลงสำคัญทั้งหมดของ mcp-broker บันทึกไว้ที่นี่
 
+## [0.3.0] - 2026-03-16
+
+### เปลี่ยนแปลง (Breaking)
+
+- **Spawner ใช้ Agent SDK แทน Bun.spawn** — เปลี่ยนจาก `Bun.spawn(['claude', ...args])` มาเป็น `@anthropic-ai/claude-agent-sdk` ทั้งหมด
+  - ลบ `generateMcpConfig`, `cleanupMcpConfig`, `buildSpawnArgs` (ไม่ต้องสร้าง temp file / CLI args อีกต่อไป)
+  - เพิ่ม `buildQueryOptions` สร้าง typed SDK options ตรงๆ
+  - เพิ่ม `runAgentInBackground` ใช้ async iterator บน `query()` ของ SDK
+  - `stopAgent` ใช้ `AbortController.abort()` แทน SIGTERM/SIGKILL
+  - `shutdownAllAgents` abort ทุก agent แทน signal-based cleanup
+- **Type rename**: `SpawnedProcess` → `SpawnedAgent`, state functions เปลี่ยนชื่อตาม
+- **`spawnAgent` return** ไม่มี `pid` อีกต่อไป — คืน `{ name, status }` เท่านั้น
+- **`list_profiles`** ตรวจ `is_running` จาก in-memory map แทน `process.kill(pid, 0)`
+
+### เพิ่มใหม่
+
+- **`AgentResult` type** — structured result จาก SDK พร้อม `subtype`, `totalCostUsd`, `durationMs`, `numTurns`
+- **`MODEL_MAP`** — mapping `opus`/`sonnet`/`haiku` → model ID จริงของ SDK
+- **Crash DM ละเอียดขึ้น** — แจ้งเหตุผลเฉพาะ: budget exceeded, max turns reached, failed
+
+### dependency ใหม่
+
+- `@anthropic-ai/claude-agent-sdk` ^0.2.76
+
 ## [0.2.0] - 2026-03-15
 
 ### เพิ่มใหม่

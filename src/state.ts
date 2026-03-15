@@ -1,4 +1,4 @@
-import type { SessionAgent, SpawnedProcess } from './types.js';
+import type { SessionAgent, SpawnedAgent } from './types.js';
 import { BrokerError } from './errors.js';
 
 let currentAgent: SessionAgent | null = null;
@@ -22,18 +22,18 @@ export function requireAgent(): SessionAgent {
   return currentAgent;
 }
 
-const spawnedProcesses = new Map<string, SpawnedProcess>();
+const spawnedAgents = new Map<string, SpawnedAgent>();
 
-export function getSpawnedProcesses(): Map<string, SpawnedProcess> {
-  return spawnedProcesses;
+export function getSpawnedAgents(): Map<string, SpawnedAgent> {
+  return spawnedAgents;
 }
 
-export function addSpawnedProcess(name: string, proc: SpawnedProcess): void {
-  spawnedProcesses.set(name, proc);
+export function addSpawnedAgent(name: string, agent: SpawnedAgent): void {
+  spawnedAgents.set(name, agent);
 }
 
-export function removeSpawnedProcess(name: string): SpawnedProcess | undefined {
-  const proc = spawnedProcesses.get(name);
-  spawnedProcesses.delete(name);
-  return proc;
+export function removeSpawnedAgent(name: string): SpawnedAgent | undefined {
+  const agent = spawnedAgents.get(name);
+  spawnedAgents.delete(name);
+  return agent;
 }

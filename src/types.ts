@@ -52,10 +52,23 @@ export interface Profile {
   permission_mode: PermissionMode;
 }
 
-export interface SpawnedProcess {
-  pid: number;
+export interface SpawnedAgent {
   profile: string;
   startedAt: Date;
-  process: import('bun').Subprocess;
-  mcpConfigPath: string;
+  abortController: AbortController;
+  completionPromise: Promise<AgentResult>;
+  running: boolean;
 }
+
+export interface AgentResult {
+  subtype: 'success' | 'error_during_execution' | 'error_max_turns' | 'error_max_budget_usd' | 'error_max_structured_output_retries';
+  totalCostUsd?: number;
+  durationMs?: number;
+  numTurns?: number;
+}
+
+export const MODEL_MAP: Record<Profile['model'], string> = {
+  opus: 'claude-opus-4-6',
+  sonnet: 'claude-sonnet-4-6',
+  haiku: 'claude-haiku-4-5',
+};

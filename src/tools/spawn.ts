@@ -3,7 +3,7 @@ import type { BrokerConfig } from '../config.js';
 import type { Profile } from '../types.js';
 import { loadProfiles } from '../profiles.js';
 import { spawnAgent, stopAgent } from '../spawner.js';
-import { requireAgent } from '../state.js';
+import { requireAgent, getSpawnedAgents } from '../state.js';
 import { isOnline } from '../presence.js';
 import { BrokerError } from '../errors.js';
 
@@ -58,19 +58,7 @@ export function handleListProfiles(
 
   const result = [];
   for (const [name, profile] of profiles) {
-    let isRunning = false;
-    const agent = db.prepare(
-      'SELECT pid, last_heartbeat FROM agents WHERE profile = ? ORDER BY updated_at DESC LIMIT 1'
-    ).get(name) as { pid: number | null; last_heartbeat: number | null } | undefined;
-
-    if (agent?.pid && isOnline(agent.last_heartbeat, config)) {
-      try {
-        process.kill(agent.pid, 0);
-        isRunning = true;
-      } catch {
-        db.prepare('UPDATE agents SET last_heartbeat = NULL WHERE pid = ?').run(agent.pid);
-      }
-    }
+    const isRunning = getSpawnedAgents().get(name)?.running ?? false;
 
     result.push({
       name,
