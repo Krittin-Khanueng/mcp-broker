@@ -25,17 +25,18 @@ Before exiting, call the broker's "unregister" tool.
 function buildMonitoringHooks(db: Database, agentName: string): QueryOptions['hooks'] {
   const logToolUse: HookCallback = async (input) => {
     if (input.hook_event_name === 'PostToolUse') {
+      const agent = getSpawnedAgents().get(agentName);
+      // Skip logging if agent was already stopped/removed (Race 3 guard)
+      if (!agent?.running) return {};
+
       const toolName = (input as any).tool_name as string;
       db.prepare('INSERT INTO agent_tool_log (agent_name, tool_name, created_at) VALUES (?, ?, ?)').run(
         agentName, toolName, Date.now(),
       );
 
-      const agent = getSpawnedAgents().get(agentName);
-      if (agent) {
-        agent.toolUseCount++;
-        agent.lastActivity = toolName;
-        db.prepare('UPDATE agents SET last_activity = ? WHERE name = ?').run(toolName, agentName);
-      }
+      agent.toolUseCount++;
+      agent.lastActivity = toolName;
+      db.prepare('UPDATE agents SET last_activity = ? WHERE name = ?').run(toolName, agentName);
     }
     return {};
   };
@@ -119,6 +120,13 @@ export function spawnAgent(
     resumeSessionId = prev.session_id;
   }
 
+  // Race 2 guard: check in-memory map first (covers the gap between
+  // DB pre-insert with NULL heartbeat and agent self-registration)
+  const existingAgent = getSpawnedAgents().get(profileName);
+  if (existingAgent?.running) {
+    throw new BrokerError('agent_already_running', `"${profileName}" is already spawned (running)`);
+  }
+
   // Singleton guard in transaction
   const preInsert = db.transaction(() => {
     const existing = db.prepare('SELECT id, last_heartbeat FROM agents WHERE name = ?').get(profileName) as
@@ -126,9 +134,7 @@ export function spawnAgent(
       | undefined;
 
     if (existing && isOnline(existing.last_heartbeat, config)) {
-      const agent = getSpawnedAgents().get(profileName);
-      const runningInfo = agent?.running ? ' (running)' : '';
-      throw new BrokerError('agent_already_running', `"${profileName}" is online${runningInfo}`);
+      throw new BrokerError('agent_already_running', `"${profileName}" is online`);
     }
 
     const now = Date.now();
@@ -202,7 +208,10 @@ async function runAgentInBackground(
       result = { subtype: 'success' };
     }
   } finally {
-    handleAgentCompletion(db, config, agentName, result);
+    // Race 1 guard: skip if stopAgent already cleaned up
+    if (getSpawnedAgents().has(agentName)) {
+      handleAgentCompletion(db, config, agentName, result);
+    }
   }
   return result;
 }
