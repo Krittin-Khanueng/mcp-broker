@@ -8,6 +8,7 @@ export interface BrokerConfig {
   pruneAfterDays: number;
   maxAgents: number;
   maxChannels: number;
+  profilesPath: string;
 }
 
 export function loadConfig(): BrokerConfig {
@@ -19,5 +20,6 @@ export function loadConfig(): BrokerConfig {
     pruneAfterDays: parseInt(process.env.BROKER_PRUNE_AFTER_DAYS || '7', 10),
     maxAgents: parseInt(process.env.BROKER_MAX_AGENTS || '100', 10),
     maxChannels: parseInt(process.env.BROKER_MAX_CHANNELS || '50', 10),
+    profilesPath: process.env.BROKER_PROFILES_PATH || join(home, '.claude', 'mcp-broker', 'profiles.yml'),
   };
 }
