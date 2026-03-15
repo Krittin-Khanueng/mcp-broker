@@ -2,6 +2,7 @@ import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../config.js';
 import { requireAgent } from '../state.js';
 import { autoHeartbeat } from '../presence.js';
+import { BrokerError } from '../errors.js';
 
 interface GetHistoryParams {
   peer?: string;
@@ -23,14 +24,14 @@ export function handleGetHistory(
 
   if (params.peer) {
     const peer = db.prepare('SELECT id FROM agents WHERE name = ?').get(params.peer) as { id: string } | undefined;
-    if (!peer) return { error: 'agent_not_found', name: params.peer };
+    if (!peer) throw new BrokerError('agent_not_found', params.peer);
     conditions.push('(m.from_agent = ? OR m.to_agent = ?)');
     queryParams.push(peer.id, peer.id);
   }
 
   if (params.channel) {
     const ch = db.prepare('SELECT id FROM channels WHERE name = ?').get(params.channel) as { id: string } | undefined;
-    if (!ch) return { error: 'channel_not_found', channel: params.channel };
+    if (!ch) throw new BrokerError('channel_not_found', params.channel);
     conditions.push('m.channel_id = ?');
     queryParams.push(ch.id);
   }
@@ -60,7 +61,7 @@ export function handlePurgeHistory(db: Database, params: PurgeParams): Record<st
   requireAgent();
   autoHeartbeat(db);
   const cutoff = new Date(params.before_date).getTime();
-  if (isNaN(cutoff)) return { error: 'invalid_date', before_date: params.before_date };
+  if (isNaN(cutoff)) throw new BrokerError('invalid_date', params.before_date);
   db.prepare('DELETE FROM messages WHERE created_at < ?').run(cutoff);
   const deleted = (db.prepare('SELECT changes() as cnt').get() as { cnt: number }).cnt;
   return { deleted_count: deleted };

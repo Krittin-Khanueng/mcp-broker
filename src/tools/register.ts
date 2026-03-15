@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { BrokerConfig } from '../config.js';
 import type { Agent } from '../types.js';
 import { setAgent, clearAgent, requireAgent } from '../state.js';
+import { BrokerError } from '../errors.js';
 import { validateName, validateRole } from '../validators.js';
 import { isOnline, updateHeartbeat, pruneStaleAgents } from '../presence.js';
 
@@ -18,11 +19,11 @@ export function handleRegister(
   params: RegisterParams
 ): Record<string, unknown> {
   const nameErr = validateName(params.name);
-  if (nameErr) return { error: 'validation_error', message: nameErr };
+  if (nameErr) throw new BrokerError('validation_error', nameErr);
 
   const role = params.role || 'peer';
   const roleErr = validateRole(role);
-  if (roleErr) return { error: 'validation_error', message: roleErr };
+  if (roleErr) throw new BrokerError('validation_error', roleErr);
 
   // Check if name exists first (before pruning, so we can reconnect even stale agents)
   const existing = db.prepare('SELECT * FROM agents WHERE name = ?').get(params.name) as Agent | undefined;
@@ -35,14 +36,14 @@ export function handleRegister(
   // Check agent limit
   const count = db.prepare('SELECT COUNT(*) as cnt FROM agents').get() as { cnt: number };
   if (count.cnt >= config.maxAgents) {
-    return { error: 'limit_exceeded', message: `Max ${config.maxAgents} agents` };
+    throw new BrokerError('limit_exceeded', `Max ${config.maxAgents} agents`);
   }
 
   if (existing) {
     if (isOnline(existing.last_heartbeat, config)) {
       let suffix = 2;
       while (db.prepare('SELECT 1 FROM agents WHERE name = ?').get(`${params.name}-${suffix}`)) suffix++;
-      return { error: 'name_taken', suggestion: `${params.name}-${suffix}` };
+      throw new BrokerError('name_taken', `${params.name}-${suffix}`);
     }
     // Reconnect offline agent — reset status to idle
     const now = Date.now();
@@ -84,7 +85,7 @@ export function handleHeartbeat(
   if (params.status) {
     const validStatuses = ['idle', 'busy', 'blocked'];
     if (!validStatuses.includes(params.status)) {
-      return { error: 'validation_error', message: 'Status must be idle, busy, or blocked' };
+      throw new BrokerError('validation_error', 'Status must be idle, busy, or blocked');
     }
     db.prepare('UPDATE agents SET status = ? WHERE id = ?').run(params.status, agent.id);
   }

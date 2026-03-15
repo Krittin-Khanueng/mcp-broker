@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { BrokerError } from '../src/errors.js';
 import { createTestDb, registerAgent } from './helpers.js';
 import { handleGetHistory, handlePurgeHistory } from '../src/tools/history.js';
 import { handleSendMessage } from '../src/tools/messaging.js';
@@ -49,6 +50,18 @@ describe('get_history', () => {
     const result = handleGetHistory(db, config, { limit: 3 });
     expect(result.messages).toHaveLength(3);
   });
+
+  it('rejects unknown peer in history', () => {
+    const a = registerAgent(db, config, 'alice');
+    setAgent(a);
+    expect(() => handleGetHistory(db, config, { peer: 'ghost' })).toThrow(BrokerError);
+  });
+
+  it('rejects unknown channel in history', () => {
+    const a = registerAgent(db, config, 'alice');
+    setAgent(a);
+    expect(() => handleGetHistory(db, config, { channel: '#ghost' })).toThrow(BrokerError);
+  });
 });
 
 describe('purge_history', () => {
@@ -62,5 +75,11 @@ describe('purge_history', () => {
     );
     const result = handlePurgeHistory(db, { before_date: '2025-01-01' });
     expect(result.deleted_count).toBe(1);
+  });
+
+  it('rejects invalid purge date', () => {
+    const a = registerAgent(db, config, 'alice');
+    setAgent(a);
+    expect(() => handlePurgeHistory(db, { before_date: 'not-a-date' })).toThrow(BrokerError);
   });
 });

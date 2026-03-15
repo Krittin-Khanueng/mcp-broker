@@ -4,6 +4,7 @@ import type { BrokerConfig } from '../config.js';
 import type { Message } from '../types.js';
 import { requireAgent } from '../state.js';
 import { validateContent } from '../validators.js';
+import { BrokerError } from '../errors.js';
 import { autoHeartbeat } from '../presence.js';
 
 interface SendParams {
@@ -21,7 +22,7 @@ export function handleSendMessage(
   autoHeartbeat(db);
 
   const contentErr = validateContent(params.content, config.maxMessageLength);
-  if (contentErr) return { error: 'validation_error', message: contentErr };
+  if (contentErr) throw new BrokerError('validation_error', contentErr);
 
   const { to, content } = params;
   const now = Date.now();
@@ -33,7 +34,7 @@ export function handleSendMessage(
   if (to.startsWith('channel:') || params.channel) {
     const channelName = params.channel ?? to.replace('channel:', '');
     const ch = db.prepare('SELECT id FROM channels WHERE name = ?').get(channelName) as { id: string } | undefined;
-    if (!ch) return { error: 'channel_not_found', channel: channelName };
+    if (!ch) throw new BrokerError('channel_not_found', channelName);
     const msgId = uuidv4();
     insertMsg.run(msgId, agent.id, null, ch.id, 'channel', content, now);
     return { message_id: msgId, delivered_to: 1 };
@@ -60,7 +61,7 @@ export function handleSendMessage(
       .prepare('SELECT id FROM agents WHERE role = ? AND id != ? AND last_heartbeat > ?')
       .all(role, agent.id, now - config.heartbeatTtl) as { id: string }[];
 
-    if (targets.length === 0) return { error: 'no_agents_with_role', role };
+    if (targets.length === 0) throw new BrokerError('no_agents_with_role', role);
 
     db.transaction(() => {
       for (const target of targets) {
@@ -72,7 +73,7 @@ export function handleSendMessage(
 
   // Direct message by name
   const recipient = db.prepare('SELECT id FROM agents WHERE name = ?').get(to) as { id: string } | undefined;
-  if (!recipient) return { error: 'agent_not_found', name: to };
+  if (!recipient) throw new BrokerError('agent_not_found', to);
 
   const msgId = uuidv4();
   insertMsg.run(msgId, agent.id, recipient.id, null, 'dm', content, now);
@@ -98,7 +99,7 @@ export function handlePollMessages(
 
   if (params.channel) {
     const ch = db.prepare('SELECT id FROM channels WHERE name = ?').get(params.channel) as { id: string } | undefined;
-    if (!ch) return { error: 'channel_not_found', channel: params.channel };
+    if (!ch) throw new BrokerError('channel_not_found', params.channel);
 
     const source = `channel:${ch.id}`;
     const cursor = db

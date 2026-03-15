@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { BrokerError } from '../src/errors.js';
 import { createTestDb, registerAgent } from './helpers.js';
 import { handleSendMessage, handlePollMessages } from '../src/tools/messaging.js';
 import { loadConfig } from '../src/config.js';
@@ -59,15 +60,13 @@ describe('send_message', () => {
   it('rejects message to unknown agent', () => {
     const a = registerAgent(db, config, 'alice');
     setAgent(a);
-    const result = handleSendMessage(db, config, { to: 'nobody', content: 'hello' });
-    expect(result.error).toBe('agent_not_found');
+    expect(() => handleSendMessage(db, config, { to: 'nobody', content: 'hello' })).toThrow(BrokerError);
   });
 
   it('rejects empty content', () => {
     const a = registerAgent(db, config, 'alice');
     setAgent(a);
-    const result = handleSendMessage(db, config, { to: 'all', content: '' });
-    expect(result.error).toBe('validation_error');
+    expect(() => handleSendMessage(db, config, { to: 'all', content: '' })).toThrow(BrokerError);
   });
 });
 
@@ -97,6 +96,12 @@ describe('poll_messages', () => {
     const result = handlePollMessages(db, config, {});
     expect(result.messages).toHaveLength(1);
     expect((result.messages as Array<{ content: string }>)[0].content).toBe('msg2');
+  });
+
+  it('rejects polling non-existent channel', () => {
+    const a = registerAgent(db, config, 'alice');
+    setAgent(a);
+    expect(() => handlePollMessages(db, config, { channel: '#nonexistent' })).toThrow(BrokerError);
   });
 
   it('returns channel messages for joined channels', () => {

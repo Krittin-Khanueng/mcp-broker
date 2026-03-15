@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { BrokerError } from '../src/errors.js';
 import { createTestDb } from './helpers.js';
 import { handleRegister, handleHeartbeat, handleUnregister } from '../src/tools/register.js';
 import { loadConfig } from '../src/config.js';
@@ -41,14 +42,17 @@ describe('register', () => {
   it('rejects duplicate online name', () => {
     handleRegister(db, config, { name: 'worker-1' });
     clearAgent();
-    const result = handleRegister(db, config, { name: 'worker-1' });
-    expect(result.error).toBe('name_taken');
-    expect(result.suggestion).toBe('worker-1-2');
+    expect(() => handleRegister(db, config, { name: 'worker-1' })).toThrow(BrokerError);
+    try {
+      handleRegister(db, config, { name: 'worker-1' });
+    } catch (e) {
+      expect((e as BrokerError).code).toBe('name_taken');
+      expect((e as BrokerError).message).toBe('worker-1-2');
+    }
   });
 
   it('rejects invalid name', () => {
-    const result = handleRegister(db, config, { name: 'bad name!' });
-    expect(result.error).toBe('validation_error');
+    expect(() => handleRegister(db, config, { name: 'bad name!' })).toThrow(BrokerError);
   });
 });
 
@@ -65,6 +69,11 @@ describe('heartbeat', () => {
     handleHeartbeat(db, config, { status: 'busy' });
     const agent = db.prepare('SELECT status FROM agents WHERE name = ?').get('agent-1') as { status: string };
     expect(agent.status).toBe('busy');
+  });
+
+  it('rejects invalid heartbeat status', () => {
+    handleRegister(db, config, { name: 'agent-1' });
+    expect(() => handleHeartbeat(db, config, { status: 'dancing' })).toThrow(BrokerError);
   });
 });
 

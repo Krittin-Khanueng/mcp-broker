@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
+import { BrokerError } from '../src/errors.js';
 import { createTestDb, registerAgent } from './helpers.js';
 import {
   handleCreateChannel, handleJoinChannel, handleLeaveChannel, handleListChannels
@@ -29,16 +30,26 @@ describe('channels', () => {
   it('rejects invalid channel name', () => {
     const a = registerAgent(db, config, 'alice');
     setAgent(a);
-    const result = handleCreateChannel(db, config, { name: 'no-hash' });
-    expect(result.error).toBe('validation_error');
+    expect(() => handleCreateChannel(db, config, { name: 'no-hash' })).toThrow(BrokerError);
   });
 
   it('rejects duplicate channel name', () => {
     const a = registerAgent(db, config, 'alice');
     setAgent(a);
     handleCreateChannel(db, config, { name: '#general' });
-    const result = handleCreateChannel(db, config, { name: '#general' });
-    expect(result.error).toBe('channel_exists');
+    expect(() => handleCreateChannel(db, config, { name: '#general' })).toThrow(BrokerError);
+  });
+
+  it('rejects joining non-existent channel', () => {
+    const a = registerAgent(db, config, 'alice');
+    setAgent(a);
+    expect(() => handleJoinChannel(db, { channel: '#ghost' })).toThrow(BrokerError);
+  });
+
+  it('rejects leaving non-existent channel', () => {
+    const a = registerAgent(db, config, 'alice');
+    setAgent(a);
+    expect(() => handleLeaveChannel(db, { channel: '#ghost' })).toThrow(BrokerError);
   });
 
   it('joins and leaves a channel', () => {
