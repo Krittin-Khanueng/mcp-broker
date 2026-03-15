@@ -119,4 +119,40 @@ describe('poll_messages', () => {
     expect(result.messages).toHaveLength(1);
     expect((result.messages as Array<{ content: string }>)[0].content).toBe('hello channel');
   });
+
+  it('returns unified inbox across DMs, broadcasts, and multiple channels', () => {
+    const a = registerAgent(db, config, 'alice');
+    const b = registerAgent(db, config, 'bob');
+
+    // Create 3 channels and join both agents to all
+    for (const ch of ['#ch1', '#ch2', '#ch3']) {
+      const chId = ch.replace('#', '');
+      db.prepare('INSERT INTO channels (id, name, created_by, created_at) VALUES (?, ?, ?, ?)').run(
+        chId, ch, a.id, Date.now()
+      );
+      db.prepare('INSERT INTO channel_members (channel_id, agent_id, joined_at) VALUES (?, ?, ?)').run(chId, a.id, Date.now());
+      db.prepare('INSERT INTO channel_members (channel_id, agent_id, joined_at) VALUES (?, ?, ?)').run(chId, b.id, Date.now());
+    }
+
+    // Alice sends: 1 DM to bob, 1 broadcast, 1 msg per channel = 5 messages
+    setAgent(a);
+    handleSendMessage(db, config, { to: 'bob', content: 'dm-msg' });
+    handleSendMessage(db, config, { to: 'all', content: 'broadcast-msg' });
+    handleSendMessage(db, config, { to: 'channel:#ch1', content: 'ch1-msg' });
+    handleSendMessage(db, config, { to: 'channel:#ch2', content: 'ch2-msg' });
+    handleSendMessage(db, config, { to: 'channel:#ch3', content: 'ch3-msg' });
+
+    // Bob polls unified inbox
+    setAgent(b);
+    const result = handlePollMessages(db, config, {});
+    const msgs = result.messages as Array<{ content: string; message_type: string }>;
+    expect(msgs).toHaveLength(5);
+    expect(msgs.map(m => m.content).sort()).toEqual([
+      'broadcast-msg', 'ch1-msg', 'ch2-msg', 'ch3-msg', 'dm-msg'
+    ]);
+
+    // Second poll should return empty (cursors updated)
+    const result2 = handlePollMessages(db, config, {});
+    expect(result2.messages).toHaveLength(0);
+  });
 });

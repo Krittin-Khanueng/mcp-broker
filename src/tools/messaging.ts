@@ -127,56 +127,58 @@ export function handlePollMessages(
   }
 
   // Unified inbox: DMs + broadcasts + all joined channels
-  const getCursor = (source: string): number => {
-    const row = db
-      .prepare('SELECT last_read_seq FROM read_cursors WHERE agent_id = ? AND source = ?')
-      .get(agent.id, source) as { last_read_seq: number } | undefined;
-    return row?.last_read_seq ?? 0;
-  };
-
-  const dmSeq = getCursor('dm');
-  const broadcastSeq = getCursor('broadcast');
-
-  const directMessages = db
-    .prepare(
-      `SELECT m.*, a.name as from_name FROM messages m
-       LEFT JOIN agents a ON m.from_agent = a.id
-       WHERE m.to_agent = ? AND m.message_type = 'dm' AND m.seq > ?
-       ORDER BY m.seq ASC LIMIT ?`
-    )
-    .all(agent.id, dmSeq, limit) as MessageRow[];
-
-  const broadcasts = db
-    .prepare(
-      `SELECT m.*, a.name as from_name FROM messages m
-       LEFT JOIN agents a ON m.from_agent = a.id
-       WHERE m.to_agent = ? AND m.message_type = 'broadcast' AND m.seq > ?
-       ORDER BY m.seq ASC LIMIT ?`
-    )
-    .all(agent.id, broadcastSeq, limit) as MessageRow[];
-
   const joinedChannels = db
     .prepare('SELECT channel_id FROM channel_members WHERE agent_id = ?')
     .all(agent.id) as { channel_id: string }[];
 
-  let channelMessages: MessageRow[] = [];
+  // Batch fetch all cursors in one query
+  const sources = ['dm', 'broadcast', ...joinedChannels.map(c => `channel:${c.channel_id}`)];
+  const placeholders = sources.map(() => '?').join(', ');
+  const cursorRows = db
+    .prepare(`SELECT source, last_read_seq FROM read_cursors WHERE agent_id = ? AND source IN (${placeholders})`)
+    .all(agent.id, ...sources) as { source: string; last_read_seq: number }[];
+  const cursorMap = new Map(cursorRows.map(r => [r.source, r.last_read_seq]));
+  const getCursor = (source: string): number => cursorMap.get(source) ?? 0;
+
+  // Build UNION ALL query
+  const parts: string[] = [];
+  const bindings: (string | number)[] = [];
+
+  // DMs branch
+  parts.push(`SELECT * FROM (
+    SELECT m.*, a.name as from_name FROM messages m
+    LEFT JOIN agents a ON m.from_agent = a.id
+    WHERE m.to_agent = ? AND m.message_type = 'dm' AND m.seq > ?
+    ORDER BY m.seq ASC LIMIT ?
+  )`);
+  bindings.push(agent.id, getCursor('dm'), limit);
+
+  // Broadcasts branch
+  parts.push(`SELECT * FROM (
+    SELECT m.*, a.name as from_name FROM messages m
+    LEFT JOIN agents a ON m.from_agent = a.id
+    WHERE m.to_agent = ? AND m.message_type = 'broadcast' AND m.seq > ?
+    ORDER BY m.seq ASC LIMIT ?
+  )`);
+  bindings.push(agent.id, getCursor('broadcast'), limit);
+
+  // Channel branches
   for (const { channel_id } of joinedChannels) {
-    const chSeq = getCursor(`channel:${channel_id}`);
-    const msgs = db
-      .prepare(
-        `SELECT m.*, a.name as from_name FROM messages m
-         LEFT JOIN agents a ON m.from_agent = a.id
-         WHERE m.channel_id = ? AND m.seq > ?
-         ORDER BY m.seq ASC LIMIT ?`
-      )
-      .all(channel_id, chSeq, limit) as MessageRow[];
-    channelMessages = channelMessages.concat(msgs);
+    parts.push(`SELECT * FROM (
+      SELECT m.*, a.name as from_name FROM messages m
+      LEFT JOIN agents a ON m.from_agent = a.id
+      WHERE m.channel_id = ? AND m.seq > ?
+      ORDER BY m.seq ASC LIMIT ?
+    )`);
+    bindings.push(channel_id, getCursor(`channel:${channel_id}`), limit);
   }
 
-  const limited = [...directMessages, ...broadcasts, ...channelMessages]
-    .sort((a, b) => a.seq - b.seq)
-    .slice(0, limit);
+  const sql = parts.join(' UNION ALL ') + ' ORDER BY seq ASC LIMIT ?';
+  bindings.push(limit);
 
+  const limited = db.prepare(sql).all(...bindings) as MessageRow[];
+
+  // Update cursors
   const updateCursor = db.prepare(
     'INSERT OR REPLACE INTO read_cursors (agent_id, source, last_read_seq) VALUES (?, ?, ?)'
   );
