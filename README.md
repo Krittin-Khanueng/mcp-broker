@@ -10,7 +10,8 @@
 - [วิธีติดตั้ง](#วิธีติดตั้ง) — ติดตั้งแบบ plugin หรือ manual
 - [วิธีใช้งาน](#วิธีใช้งาน) — ลงทะเบียน, แชท, channel, broadcast, coordinator
 - [ตัวอย่างการใช้งาน](#ตัวอย่างการใช้งาน) — 6 กรณีใช้งานจริง
-- [เครื่องมือ (Tools)](#เครื่องมือ-tools) — รายละเอียด 12 MCP tools
+- [Agent Profiles & Spawner](#agent-profiles--spawner) — กำหนดโปรไฟล์ agent แล้ว spawn อัตโนมัติ
+- [เครื่องมือ (Tools)](#เครื่องมือ-tools) — รายละเอียด 15 MCP tools
 - [การตั้งค่า](#การตั้งค่า) — ตัวแปร environment
 - [ฟีเจอร์ Plugin](#ฟีเจอร์-plugin) — skills, coordinator agent, hooks
 - [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์) — ผังไฟล์
@@ -89,7 +90,7 @@ bun --version
 /plugin install broker
 ```
 
-ได้ MCP server (12 tools), คำสั่ง slash, coordinator agent, และ hooks ทั้งหมด — ตั้งค่าให้อัตโนมัติ
+ได้ MCP server (15 tools), คำสั่ง slash, coordinator agent, และ hooks ทั้งหมด — ตั้งค่าให้อัตโนมัติ
 
 ### แบบ Manual
 
@@ -287,6 +288,88 @@ Worker รายงานสถานะเข้า `#status`:
 
 ---
 
+## Agent Profiles & Spawner
+
+กำหนดโปรไฟล์ agent ไว้ล่วงหน้าใน YAML แล้วให้ broker spawn Claude Code instance ให้อัตโนมัติ — ไม่ต้องเขียน prompt เองทุกครั้ง
+
+### ตั้งค่าโปรไฟล์
+
+สร้างไฟล์ `~/.claude/mcp-broker/profiles.yml` (ดูตัวอย่างใน `profiles.example.yml`):
+
+```yaml
+profiles:
+  reviewer:
+    system_prompt: |
+      You are an expert code reviewer.
+      Check for code quality, security, and performance.
+    model: sonnet
+    max_budget_usd: 1.00
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - Bash
+    additional_instructions: |
+      ## Review Guidelines
+      - Check OWASP Top 10
+      - Report only, do not modify code
+    role: worker
+    permission_mode: auto
+
+  tester:
+    system_prompt: |
+      You are a test engineer.
+      Write comprehensive tests covering edge cases.
+    model: haiku
+    max_budget_usd: 2.00
+    allowed_tools:
+      - Read
+      - Write
+      - Edit
+      - Bash
+    role: worker
+```
+
+### ฟิลด์โปรไฟล์
+
+| ฟิลด์ | ต้องระบุ | คำอธิบาย |
+|-------|:---:|---------|
+| `system_prompt` | ✓ | คำสั่งหลักของ agent |
+| `model` | ✓ | `opus`, `sonnet`, หรือ `haiku` |
+| `max_budget_usd` | | งบประมาณสูงสุด (ดอลลาร์) |
+| `auto_register` | | ลงทะเบียนกับ broker อัตโนมัติ (ค่าเริ่มต้น: `true`) |
+| `allowed_tools` | | จำกัด built-in tools (MCP tools ใช้ได้เสมอ) |
+| `additional_instructions` | | คำสั่งเพิ่มเติม |
+| `role` | | `peer`, `worker`, `supervisor` (ค่าเริ่มต้น: `worker`) |
+| `working_directory` | | directory ที่ agent ทำงาน |
+| `permission_mode` | | `default`, `auto`, `bypassPermissions` (ค่าเริ่มต้น: `auto`) |
+
+### วิธีใช้
+
+```
+> "ดูโปรไฟล์ที่มีทั้งหมด"
+# Claude เรียก: list_profiles()
+# → [{name: "reviewer", model: "sonnet", is_running: false}, ...]
+
+> "spawn reviewer มารีวิวไฟล์ src/auth.ts"
+# Claude เรียก: spawn_agent(profile: "reviewer", task: "Review src/auth.ts")
+# → {name: "reviewer", pid: 12345, status: "spawned"}
+
+> "หยุด reviewer"
+# Claude เรียก: stop_agent(name: "reviewer")
+# → {name: "reviewer", stopped: true}
+```
+
+### คุณสมบัติ
+
+- **Singleton** — 1 โปรไฟล์ = 1 instance (ป้องกัน spawn ซ้ำ)
+- **Auto-register** — agent ลงทะเบียนกับ broker อัตโนมัติ สื่อสารผ่าน message ได้ทันที
+- **Crash detection** — ถ้า agent crash จะแจ้ง coordinator ผ่าน DM อัตโนมัติ
+- **Graceful shutdown** — SIGTERM → รอ 10 วิ → SIGKILL
+- **Cleanup** — ปิด broker แล้ว agent ทั้งหมดถูก cleanup อัตโนมัติ
+
+---
+
 ## เครื่องมือ (Tools)
 
 ### ลงทะเบียนและติดตามสถานะ
@@ -321,6 +404,14 @@ Worker รายงานสถานะเข้า `#status`:
 | `get_history` | ค้นหาประวัติข้อความ กรองตาม peer, channel, ลำดับ, และจำนวน |
 | `purge_history` | ลบข้อความที่เก่ากว่าวันที่กำหนด (ISO 8601) |
 
+### โปรไฟล์และ Spawner
+
+| เครื่องมือ | คำอธิบาย |
+|-----------|---------|
+| `spawn_agent` | Spawn Claude Code instance จากโปรไฟล์ที่กำหนดไว้ใน `profiles.yml` |
+| `stop_agent` | หยุด agent ที่ spawn มา (SIGTERM → SIGKILL) |
+| `list_profiles` | แสดงโปรไฟล์ทั้งหมดพร้อมสถานะว่ากำลังทำงานอยู่หรือไม่ |
+
 ## การตั้งค่า
 
 ตั้งค่าทั้งหมดผ่านตัวแปร environment:
@@ -333,6 +424,7 @@ Worker รายงานสถานะเข้า `#status`:
 | `BROKER_PRUNE_AFTER_DAYS` | `7` | ลบ agent ที่ไม่ใช้งานอัตโนมัติหลังจำนวนวันนี้ |
 | `BROKER_MAX_AGENTS` | `100` | จำนวน agent สูงสุดที่ลงทะเบียนได้ |
 | `BROKER_MAX_CHANNELS` | `50` | จำนวน channel สูงสุด |
+| `BROKER_PROFILES_PATH` | `~/.claude/mcp-broker/profiles.yml` | ตำแหน่งไฟล์โปรไฟล์ agent |
 
 ## ฟีเจอร์ Plugin
 
@@ -371,21 +463,25 @@ agents/
   broker-coordinator.md   agent ประสานงานหลายตัว
 hooks/
   hooks.json        ลงทะเบียนอัตโนมัติเมื่อเริ่ม/จบ session
+profiles.example.yml  ตัวอย่างไฟล์โปรไฟล์ agent
 src/
-  index.ts          จุดเริ่มต้น MCP server — ลงทะเบียน 12 tools
+  index.ts          จุดเริ่มต้น MCP server — ลงทะเบียน 15 tools
   config.ts         การตั้งค่าจาก environment พร้อมค่าเริ่มต้น
   errors.ts         คลาส BrokerError สำหรับจัดการ error
-  db.ts             สร้างโครงสร้าง SQLite (WAL mode, foreign keys)
-  state.ts          สถานะ session ในหน่วยความจำ (agent ปัจจุบัน)
+  db.ts             สร้างโครงสร้าง SQLite (WAL mode, foreign keys, migration)
+  state.ts          สถานะ session ในหน่วยความจำ (agent ปัจจุบัน + spawned processes)
   presence.ts       heartbeat, ตรวจสอบออนไลน์, ตัด agent หมดอายุ
-  types.ts          interface หลัก (Agent, Channel, Message, SessionAgent)
+  types.ts          interface หลัก (Agent, Channel, Message, Profile, SpawnedProcess)
   validators.ts     ตรวจสอบข้อมูลนำเข้า (ชื่อ, channel, role, เนื้อหา)
+  profiles.ts       โหลดและตรวจสอบโปรไฟล์ agent จาก YAML
+  spawner.ts        spawn/stop Claude CLI, จัดการ process, MCP config generation
   tools/
     register.ts     register, heartbeat, unregister
     messaging.ts    send_message, poll_messages
     channels.ts     create_channel, join_channel, leave_channel, list_channels
     peers.ts        list_peers
     history.ts      get_history, purge_history
+    spawn.ts        spawn_agent, stop_agent, list_profiles
 tests/
   helpers.ts        เครื่องมือทดสอบ SQLite ในหน่วยความจำ
   *.test.ts         ทดสอบครบทุกโมดูล
@@ -449,10 +545,15 @@ MCP Client (Claude) ──stdio──▶ index.ts (MCP Server)
                                   ├─ tools/messaging.ts  ──▶ presence.ts (heartbeat)
                                   ├─ tools/channels.ts   ──▶ validators.ts (ตรวจสอบข้อมูล)
                                   ├─ tools/peers.ts      ──▶ errors.ts (BrokerError)
-                                  └─ tools/history.ts    ──▶ db.ts (SQLite)
-                                                              │
-                                                              ▼
-                                                          broker.db
+                                  ├─ tools/history.ts    ──▶ db.ts (SQLite)
+                                  └─ tools/spawn.ts      ──▶ profiles.ts (YAML config)
+                                       │                 ──▶ spawner.ts (process mgmt)
+                                       │                        │
+                                       ▼                        ▼
+                                  claude CLI ◀──────── profiles.yml
+                                  (spawned)                  │
+                                                             ▼
+                                                         broker.db
 ```
 
 ### เทคโนโลยีที่ใช้
@@ -471,6 +572,7 @@ MCP Client (Claude) ──stdio──▶ index.ts (MCP Server)
 - `@modelcontextprotocol/sdk` — MCP server framework
 - `uuid` — สร้าง ID ที่ไม่ซ้ำ
 - `zod` — ตรวจสอบ schema
+- `yaml` — อ่านไฟล์โปรไฟล์ agent
 
 **Dev:**
 - `typescript` — ตรวจสอบ type และคอมไพล์

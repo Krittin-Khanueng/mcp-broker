@@ -2,6 +2,19 @@
 
 การเปลี่ยนแปลงสำคัญทั้งหมดของ mcp-broker บันทึกไว้ที่นี่
 
+## [0.2.0] - 2026-03-15
+
+### เพิ่มใหม่
+
+- **Agent Profiles** — กำหนดโปรไฟล์ agent ไว้ล่วงหน้าใน `profiles.yml` (system prompt, model, tools, budget, role, working directory, permission mode)
+- **Process Spawner** — broker spawn Claude Code CLI instances จากโปรไฟล์ผ่าน MCP tool `spawn_agent`
+- **Lifecycle Manager** — ติดตาม process, หยุด agent ด้วย `stop_agent` (SIGTERM/SIGKILL), ตรวจจับ crash แล้วแจ้ง coordinator อัตโนมัติ
+- **3 MCP tools ใหม่**: `spawn_agent`, `stop_agent`, `list_profiles` (รวมเป็น 15 tools)
+- **DB migration** — เพิ่มคอลัมน์ `pid`, `profile`, `spawned_by` ใน agents table อัตโนมัติ
+- **Singleton guard** — 1 โปรไฟล์ = 1 instance ป้องกัน spawn ซ้ำด้วย SQLite transaction
+- **Shutdown cleanup** — ปิด broker แล้ว SIGTERM/SIGKILL spawned agents ทั้งหมดอัตโนมัติ
+- **ตัวแปร environment ใหม่**: `BROKER_PROFILES_PATH`
+
 ## [0.1.0] - 2026-03-15
 
 ### เพิ่มใหม่
