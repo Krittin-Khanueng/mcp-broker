@@ -1,4 +1,5 @@
 import type { SessionAgent } from './types.js';
+import { BrokerError } from './errors.js';
 
 let currentAgent: SessionAgent | null = null;
 
@@ -16,7 +17,7 @@ export function clearAgent(): void {
 
 export function requireAgent(): SessionAgent {
   if (!currentAgent) {
-    throw new Error('not_registered');
+    throw new BrokerError('not_registered', 'Agent not registered');
   }
   return currentAgent;
 }
