@@ -37,3 +37,25 @@ export interface SessionAgent {
   name: string;
   role: AgentRole;
 }
+
+export type PermissionMode = 'default' | 'auto' | 'bypassPermissions';
+
+export interface Profile {
+  system_prompt: string;
+  model: 'opus' | 'sonnet' | 'haiku';
+  max_budget_usd?: number;
+  auto_register: boolean;
+  allowed_tools?: string[];
+  additional_instructions?: string;
+  role: AgentRole;
+  working_directory?: string;
+  permission_mode: PermissionMode;
+}
+
+export interface SpawnedProcess {
+  pid: number;
+  profile: string;
+  startedAt: Date;
+  process: import('bun').Subprocess;
+  mcpConfigPath: string;
+}
