@@ -1,7 +1,15 @@
-import { describe, it, expect, afterEach } from 'bun:test';
-import { generateMcpConfig, cleanupMcpConfig, buildSpawnArgs } from '../src/spawner.js';
+import { describe, it, expect, afterEach, beforeEach } from 'bun:test';
+import { generateMcpConfig, cleanupMcpConfig, buildSpawnArgs, stopAgent } from '../src/spawner.js';
 import { existsSync, readFileSync } from 'fs';
 import type { Profile } from '../src/types.js';
+import { createTestDb } from './helpers.js';
+import { loadConfig } from '../src/config.js';
+import { getSpawnedProcesses, clearAgent } from '../src/state.js';
+import { handleRegister } from '../src/tools/register.js';
+import { isOnline } from '../src/presence.js';
+import { v4 as uuidv4 } from 'uuid';
+import type { Database } from 'bun:sqlite';
+import type { BrokerConfig } from '../src/config.js';
 
 let createdPaths: string[] = [];
 
@@ -122,5 +130,61 @@ describe('buildSpawnArgs', () => {
     const args = buildSpawnArgs('reviewer', baseProfile, '/tmp/mcp.json');
     const lastArg = args[args.length - 1];
     expect(lastArg).toContain('You are ready to work');
+  });
+});
+
+let db: Database;
+let config: BrokerConfig;
+
+describe('spawnAgent DB pre-insert logic', () => {
+  beforeEach(() => {
+    db = createTestDb();
+    config = loadConfig();
+    clearAgent();
+    getSpawnedProcesses().clear();
+  });
+
+  it('pre-inserted row has NULL heartbeat and correct profile/spawned_by', () => {
+    handleRegister(db, config, { name: 'coordinator', role: 'supervisor' });
+
+    const now = Date.now();
+    db.prepare(
+      'INSERT INTO agents (id, name, role, status, last_heartbeat, created_at, updated_at, profile, spawned_by) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)'
+    ).run(uuidv4(), 'reviewer', 'worker', 'idle', now, now, 'reviewer', 'coordinator');
+
+    const agent = db.prepare('SELECT * FROM agents WHERE name = ?').get('reviewer') as any;
+    expect(agent.last_heartbeat).toBeNull();
+    expect(agent.profile).toBe('reviewer');
+    expect(agent.spawned_by).toBe('coordinator');
+    expect(agent.status).toBe('idle');
+  });
+
+  it('pre-inserted row with NULL heartbeat allows register reconnect', () => {
+    const now = Date.now();
+    db.prepare(
+      'INSERT INTO agents (id, name, role, status, last_heartbeat, created_at, updated_at, profile, spawned_by) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)'
+    ).run(uuidv4(), 'reviewer', 'worker', 'idle', now, now, 'reviewer', 'coordinator');
+
+    const result = handleRegister(db, config, { name: 'reviewer', role: 'worker' });
+    expect(result.name).toBe('reviewer');
+  });
+
+  it('online agent blocks singleton guard', () => {
+    handleRegister(db, config, { name: 'reviewer', role: 'worker' });
+    clearAgent();
+
+    const existing = db.prepare('SELECT last_heartbeat FROM agents WHERE name = ?').get('reviewer') as any;
+    expect(isOnline(existing.last_heartbeat, config)).toBe(true);
+  });
+});
+
+describe('stopAgent', () => {
+  beforeEach(() => {
+    db = createTestDb();
+    getSpawnedProcesses().clear();
+  });
+
+  it('throws not_managed for unknown agent', () => {
+    expect(() => stopAgent(db, 'unknown-agent')).toThrow();
   });
 });
