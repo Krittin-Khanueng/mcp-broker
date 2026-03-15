@@ -9,7 +9,7 @@
 - [สิ่งที่ต้องติดตั้งก่อน](#สิ่งที่ต้องติดตั้งก่อน) — Bun, Claude Code
 - [วิธีติดตั้ง](#วิธีติดตั้ง) — ติดตั้งแบบ plugin หรือ manual
 - [วิธีใช้งาน](#วิธีใช้งาน) — ลงทะเบียน, แชท, channel, broadcast, coordinator
-- [ตัวอย่างการใช้งาน](#ตัวอย่างการใช้งาน) — 6 กรณีใช้งานจริง
+- [ตัวอย่างการใช้งาน](#ตัวอย่างการใช้งาน) — 8 กรณีใช้งานจริง
 - [Agent Profiles & Spawner](#agent-profiles--spawner) — กำหนดโปรไฟล์ agent แล้ว spawn อัตโนมัติ
 - [เครื่องมือ (Tools)](#เครื่องมือ-tools) — รายละเอียด 15 MCP tools
 - [การตั้งค่า](#การตั้งค่า) — ตัวแปร environment
@@ -174,6 +174,33 @@ Coordinator จะ:
 3. แจก 1 ไฟล์ให้แต่ละ worker รีวิว
 4. รวมผลรีวิวกลับมาเป็นสรุป
 
+### Agent Profiles: spawn จากโปรไฟล์
+
+กำหนด agent ไว้ล่วงหน้าใน `profiles.yml` แล้ว spawn ได้ทันที:
+
+```
+> "ดูโปรไฟล์ที่มี"
+# Claude เรียก: list_profiles()
+# → [{name: "reviewer", model: "sonnet", is_running: false},
+#    {name: "tester", model: "haiku", is_running: false}]
+
+> "spawn reviewer มารีวิว src/auth.ts"
+# Claude เรียก: spawn_agent(profile: "reviewer", task: "Review src/auth.ts for security issues")
+# → {name: "reviewer", pid: 45678, status: "spawned"}
+# reviewer ลงทะเบียนอัตโนมัติ ทำงานแบบ non-interactive แล้วจบเอง
+
+> "spawn tester มาเขียน test ให้ src/utils.ts"
+# Claude เรียก: spawn_agent(profile: "tester", task: "Write tests for src/utils.ts")
+# → {name: "tester", pid: 45679, status: "spawned"}
+```
+
+ถ้าต้องการหยุด agent ก่อนทำเสร็จ:
+```
+> "หยุด reviewer"
+# Claude เรียก: stop_agent(name: "reviewer")
+# → {name: "reviewer", stopped: true}
+```
+
 ### ค้นหา: ใครออนไลน์อยู่?
 
 ```
@@ -285,6 +312,60 @@ Worker รายงานสถานะเข้า `#status`:
    - Bun + SQLite
    รายงานว่าชุดค่าไหนผ่าน/ไม่ผ่าน"
 ```
+
+### 7. Spawn agent จากโปรไฟล์ — รีวิว + ทดสอบอัตโนมัติ
+
+**สถานการณ์:** มีโปรไฟล์ `reviewer` และ `tester` ตั้งไว้แล้ว อยาก spawn ทั้งคู่ทำงานพร้อมกัน
+
+```
+> "ลงทะเบียนชื่อ 'lead' เป็น supervisor
+   spawn reviewer มารีวิว src/api/ ทั้ง directory
+   spawn tester มาเขียน test ให้ src/services/"
+
+# Claude เรียก: register(name: "lead", role: "supervisor")
+# Claude เรียก: spawn_agent(profile: "reviewer", task: "Review all files in src/api/")
+# Claude เรียก: spawn_agent(profile: "tester", task: "Write tests for src/services/")
+
+# reviewer และ tester ลงทะเบียนอัตโนมัติ ทำงานแบบ non-interactive
+# lead สามารถ poll_messages() เพื่อดูผลเมื่อเสร็จ
+# ถ้า agent ไหน crash จะได้รับ DM แจ้งอัตโนมัติ
+```
+
+### 8. Spawn agent ตาม role เฉพาะทาง
+
+**สถานการณ์:** ตั้งโปรไฟล์หลายตัวไว้ใช้ตามงาน — security audit, performance check, docs writer
+
+```yaml
+# profiles.yml
+profiles:
+  security-auditor:
+    system_prompt: |
+      You are a security specialist.
+      Scan for vulnerabilities: injection, XSS, auth bypass, secrets in code.
+    model: opus
+    max_budget_usd: 3.00
+    allowed_tools: [Read, Grep, Glob, Bash]
+    role: worker
+
+  docs-writer:
+    system_prompt: |
+      You are a technical writer.
+      Write clear, concise documentation for the given code.
+    model: haiku
+    max_budget_usd: 1.00
+    allowed_tools: [Read, Write, Edit, Grep, Glob]
+    role: worker
+```
+
+```
+> "spawn security-auditor มาตรวจ src/auth/ ทั้งหมด"
+# Claude เรียก: spawn_agent(profile: "security-auditor", task: "Full security audit of src/auth/")
+
+> "spawn docs-writer มาเขียน docs ให้ src/api/"
+# Claude เรียก: spawn_agent(profile: "docs-writer", task: "Write API documentation for src/api/")
+```
+
+ใช้ `list_profiles()` เพื่อดูว่า agent ไหนกำลังทำงานอยู่ และ `stop_agent()` เพื่อหยุดก่อนเวลา
 
 ---
 
