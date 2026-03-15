@@ -54,6 +54,19 @@ Each agent connects via stdio and uses MCP tools to:
 4. **Poll** for new messages (cursor-based, no duplicates)
 5. **Manage channels** for topic-based communication
 
+## Prerequisites
+
+- [**Bun**](https://bun.sh/) v1.0+ — runtime (ใช้รัน TypeScript ตรง ไม่ต้อง build)
+- [**Claude Code**](https://claude.com/code) — CLI agent ของ Anthropic (ต้องรองรับ plugin system)
+
+```bash
+# ติดตั้ง Bun (macOS / Linux)
+curl -fsSL https://bun.sh/install | bash
+
+# ตรวจสอบ version
+bun --version
+```
+
 ## Install as Claude Code Plugin
 
 ```bash
@@ -367,13 +380,91 @@ tests/
   *.test.ts         Full test coverage per module
 ```
 
-## Tech Stack
+## Development
 
-- **Bun** — runtime (runs TypeScript directly, no build step)
-- **bun:sqlite** — built-in SQLite with WAL mode
-- **MCP SDK** (`@modelcontextprotocol/sdk`) — server framework with stdio transport
-- **Zod** — input schema validation
-- **bun:test** — test runner
+### Prerequisites
+
+- [Bun](https://bun.sh/) v1.0+
+- Git
+
+### Setup
+
+```bash
+git clone https://github.com/krittinkhaneung/mcp-broker.git
+cd mcp-broker
+bun install
+```
+
+### Commands
+
+```bash
+bun test              # run all tests (in-memory SQLite)
+bun test --watch      # run tests in watch mode
+bun run build         # compile TypeScript to dist/
+bun run dev           # compile with --watch
+bun src/index.ts      # start MCP server directly (stdio)
+```
+
+### Running Tests
+
+Tests ใช้ in-memory SQLite — ไม่ต้องตั้งค่า database:
+
+```bash
+$ bun test
+bun test v1.x.x
+
+ ✓ tests/db.test.ts
+ ✓ tests/register.test.ts
+ ✓ tests/messaging.test.ts
+ ✓ tests/channels.test.ts
+ ✓ tests/peers.test.ts
+ ✓ tests/history.test.ts
+ ✓ tests/wrapHandler.test.ts
+```
+
+### Adding a New Tool
+
+1. สร้าง handler ใน `src/tools/` (ดูตัวอย่างจาก `peers.ts`)
+2. เพิ่ม test ใน `tests/`
+3. Wire tool เข้า `src/index.ts` ด้วย `server.registerTool()`
+4. อัพเดต README tools table
+
+### Project Architecture
+
+```
+MCP Client (Claude) ──stdio──▶ index.ts (MCP Server)
+                                  │
+                                  ├─ tools/register.ts   ──▶ state.ts (session singleton)
+                                  ├─ tools/messaging.ts  ──▶ presence.ts (heartbeat)
+                                  ├─ tools/channels.ts   ──▶ validators.ts (input checks)
+                                  ├─ tools/peers.ts      ──▶ errors.ts (BrokerError)
+                                  └─ tools/history.ts    ──▶ db.ts (SQLite)
+                                                              │
+                                                              ▼
+                                                          broker.db
+```
+
+### Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Runtime | [Bun](https://bun.sh/) — runs TypeScript directly, no build step |
+| Database | `bun:sqlite` — built-in SQLite with WAL mode |
+| MCP Framework | `@modelcontextprotocol/sdk` — stdio transport |
+| Validation | [Zod](https://zod.dev/) — input schema validation |
+| Testing | `bun:test` — built-in test runner with in-memory SQLite |
+
+### Dependencies
+
+**Runtime:**
+- `@modelcontextprotocol/sdk` — MCP server framework
+- `uuid` — unique ID generation
+- `zod` — schema validation
+
+**Dev:**
+- `typescript` — type checking and compilation
+- `bun-types` — Bun API type definitions
+- `@types/uuid` — UUID type definitions
 
 ## License
 
