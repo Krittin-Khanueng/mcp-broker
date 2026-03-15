@@ -1,79 +1,79 @@
-# Security
+# ความปลอดภัย
 
-## Threat Model
+## รูปแบบภัยคุกคาม
 
-mcp-broker is designed for **local, single-user environments** — multiple Claude instances on the same machine coordinating through a shared SQLite database. It is **not** designed for multi-user, multi-tenant, or networked deployments.
+mcp-broker ออกแบบมาสำหรับ **สภาพแวดล้อมภายในเครื่อง ผู้ใช้คนเดียว** — Claude หลาย instance บนเครื่องเดียวกันประสานงานผ่านฐานข้อมูล SQLite ร่วมกัน **ไม่ได้** ออกแบบสำหรับระบบหลายผู้ใช้ หลาย tenant หรือเชื่อมต่อผ่านเครือข่าย
 
-### In Scope
+### อยู่ในขอบเขต
 
-- Agents running on the same machine under the same user account
-- Communication between Claude Code sessions via stdio transport
-- Data persisted in a local SQLite database file
+- Agent ที่รันบนเครื่องเดียวกันภายใต้บัญชีผู้ใช้เดียวกัน
+- การสื่อสารระหว่าง Claude Code sessions ผ่าน stdio transport
+- ข้อมูลที่เก็บในไฟล์ฐานข้อมูล SQLite ภายในเครื่อง
 
-### Out of Scope
+### นอกขอบเขต
 
-- Network-facing deployments (no authentication, no TLS)
-- Multi-user or multi-tenant isolation
-- Protection against malicious agents on the same machine (same trust boundary)
+- การ deploy แบบเชื่อมต่อเครือข่าย (ไม่มีการยืนยันตัวตน ไม่มี TLS)
+- การแยกข้อมูลระหว่างผู้ใช้หลายคนหรือหลาย tenant
+- การป้องกัน agent ที่เป็นอันตรายบนเครื่องเดียวกัน (อยู่ในขอบเขตความเชื่อถือเดียวกัน)
 
-## Security Properties
+## คุณสมบัติด้านความปลอดภัย
 
-### What mcp-broker Provides
+### สิ่งที่ mcp-broker มีให้
 
-| Property | Implementation |
-|----------|---------------|
-| **Input validation** | All inputs validated via Zod schemas + custom validators — names, channels, roles, and content are constrained by regex and length limits |
-| **SQL injection prevention** | All database queries use parameterized prepared statements — no string interpolation in SQL |
-| **Resource limits** | Configurable caps on agents (`BROKER_MAX_AGENTS`), channels (`BROKER_MAX_CHANNELS`), message length (`BROKER_MAX_MESSAGE_LENGTH`) to prevent resource exhaustion |
-| **Auto-cleanup** | Stale agents pruned after configurable TTL (`BROKER_PRUNE_AFTER_DAYS`), `purge_history` for old messages |
-| **Foreign key integrity** | SQLite foreign keys enforced (`PRAGMA foreign_keys = ON`) with cascading deletes |
-| **WAL mode** | Write-ahead logging for crash resilience and concurrent read/write safety |
-| **Typed errors** | `BrokerError` class prevents stack trace leakage — only error codes and messages are returned to agents |
+| คุณสมบัติ | การทำงาน |
+|----------|---------|
+| **ตรวจสอบข้อมูลนำเข้า** | ข้อมูลทั้งหมดผ่านการตรวจสอบด้วย Zod schemas + custom validators — ชื่อ, channel, role, และเนื้อหาถูกจำกัดด้วย regex และความยาว |
+| **ป้องกัน SQL injection** | ทุก query ใช้ parameterized prepared statements — ไม่มีการต่อ string ใน SQL |
+| **จำกัดทรัพยากร** | กำหนดเพดาน agent (`BROKER_MAX_AGENTS`), channel (`BROKER_MAX_CHANNELS`), ความยาวข้อความ (`BROKER_MAX_MESSAGE_LENGTH`) เพื่อป้องกันทรัพยากรหมด |
+| **ล้างข้อมูลอัตโนมัติ** | ตัด agent ที่หมดอายุตาม TTL (`BROKER_PRUNE_AFTER_DAYS`), `purge_history` สำหรับข้อความเก่า |
+| **ความสมบูรณ์ของ foreign key** | SQLite บังคับ foreign keys (`PRAGMA foreign_keys = ON`) พร้อม cascading deletes |
+| **WAL mode** | Write-ahead logging สำหรับความทนทานต่อการ crash และการอ่าน/เขียนพร้อมกัน |
+| **Error แบบมี type** | คลาส `BrokerError` ป้องกันการรั่วไหลของ stack trace — ส่งคืนเฉพาะรหัส error และข้อความ |
 
-### What mcp-broker Does NOT Provide
+### สิ่งที่ mcp-broker ไม่มี
 
-| Property | Reason |
-|----------|--------|
-| **Authentication** | All agents on the same machine share the same trust boundary — no passwords, tokens, or certificates |
-| **Authorization** | Any registered agent can message any other agent, join any channel, and read any history — no access control |
-| **Encryption at rest** | SQLite database is a plain file readable by any process with filesystem access |
-| **Encryption in transit** | stdio transport is local IPC — no network involved |
-| **Rate limiting** | Resource limits cap totals but don't throttle per-agent request rates |
-| **Audit logging** | Message history exists but there is no tamper-proof audit trail |
+| คุณสมบัติ | เหตุผล |
+|----------|-------|
+| **การยืนยันตัวตน** | agent ทุกตัวบนเครื่องเดียวกันอยู่ในขอบเขตความเชื่อถือเดียวกัน — ไม่มีรหัสผ่าน token หรือใบรับรอง |
+| **การควบคุมสิทธิ์** | agent ที่ลงทะเบียนแล้วสามารถส่งข้อความถึง agent ใดก็ได้ เข้าร่วม channel ใดก็ได้ และอ่านประวัติทั้งหมด — ไม่มีการควบคุมการเข้าถึง |
+| **เข้ารหัสข้อมูลที่เก็บ** | ฐานข้อมูล SQLite เป็นไฟล์ธรรมดาที่ process ใดก็อ่านได้หากเข้าถึงไฟล์ได้ |
+| **เข้ารหัสข้อมูลระหว่างส่ง** | stdio transport เป็น IPC ภายในเครื่อง — ไม่ผ่านเครือข่าย |
+| **จำกัดอัตราการเรียก** | การจำกัดทรัพยากรกำหนดเพดานรวม แต่ไม่ได้จำกัดอัตราต่อ agent |
+| **บันทึกการตรวจสอบ** | มีประวัติข้อความ แต่ไม่มี audit trail ที่ป้องกันการแก้ไข |
 
-## Data Storage
+## การจัดเก็บข้อมูล
 
-All data is stored in a single SQLite database file:
+ข้อมูลทั้งหมดเก็บในไฟล์ฐานข้อมูล SQLite ไฟล์เดียว:
 
-- **Default location**: `${CLAUDE_PLUGIN_ROOT}/broker.db` (plugin) or `~/.claude/mcp-broker/broker.db` (manual)
-- **Contents**: agent registrations, messages, channels, read cursors
-- **Permissions**: inherits filesystem permissions from the creating process
-- **Backup**: standard SQLite backup methods (copy the `.db`, `.db-wal`, `.db-shm` files together while no write is in progress, or use `.backup` command)
+- **ตำแหน่งเริ่มต้น**: `${CLAUDE_PLUGIN_ROOT}/broker.db` (plugin) หรือ `~/.claude/mcp-broker/broker.db` (manual)
+- **เนื้อหา**: การลงทะเบียน agent, ข้อความ, channel, ตำแหน่งการอ่าน
+- **สิทธิ์ไฟล์**: สืบทอดจาก process ที่สร้าง
+- **สำรองข้อมูล**: ใช้วิธีสำรอง SQLite มาตรฐาน (คัดลอกไฟล์ `.db`, `.db-wal`, `.db-shm` พร้อมกันขณะไม่มีการเขียน หรือใช้คำสั่ง `.backup`)
 
-### Sensitive Data Considerations
+### ข้อควรระวังเรื่องข้อมูลที่ละเอียดอ่อน
 
-Messages exchanged between agents may contain:
-- Code snippets and file paths
-- Task descriptions and work assignments
-- Error messages and stack traces
+ข้อความที่แลกเปลี่ยนระหว่าง agent อาจมี:
+- โค้ดและ path ของไฟล์
+- รายละเอียดงานที่มอบหมาย
+- ข้อความ error และ stack traces
 
-**Recommendation**: Do not send credentials, API keys, or secrets through broker messages. Use environment variables or secret managers for sensitive values.
+**คำแนะนำ**: ห้ามส่งรหัสผ่าน, API key, หรือข้อมูลลับผ่านข้อความ broker ใช้ตัวแปร environment หรือ secret manager สำหรับข้อมูลที่ละเอียดอ่อน
 
-## Hardening for Production Use
+## การเสริมความแข็งแกร่งสำหรับใช้งานจริง
 
-If adapting mcp-broker for environments beyond single-user local use:
+หากต้องการปรับ mcp-broker สำหรับสภาพแวดล้อมที่มากกว่าผู้ใช้คนเดียวบนเครื่อง:
 
-1. **Add authentication** — require agent registration with a pre-shared key or token
-2. **Add authorization** — channel-level permissions, private channels, role-based message restrictions
-3. **Encrypt the database** — use SQLCipher or full-disk encryption
-4. **Add rate limiting** — per-agent message rate caps to prevent abuse
-5. **Restrict DB file permissions** — `chmod 600 broker.db` to limit access to the owning user
-6. **Enable audit logging** — immutable log of all registration and messaging events
+1. **เพิ่มการยืนยันตัวตน** — กำหนดให้ลงทะเบียนด้วย pre-shared key หรือ token
+2. **เพิ่มการควบคุมสิทธิ์** — สิทธิ์ระดับ channel, channel ส่วนตัว, จำกัดข้อความตาม role
+3. **เข้ารหัสฐานข้อมูล** — ใช้ SQLCipher หรือเข้ารหัสทั้งดิสก์
+4. **เพิ่มการจำกัดอัตรา** — กำหนดเพดานอัตราข้อความต่อ agent เพื่อป้องกันการใช้งานเกิน
+5. **จำกัดสิทธิ์ไฟล์ DB** — `chmod 600 broker.db` เพื่อจำกัดการเข้าถึงเฉพาะเจ้าของ
+6. **เปิดใช้บันทึกการตรวจสอบ** — บันทึกที่แก้ไขไม่ได้ของการลงทะเบียนและการส่งข้อความทั้งหมด
 
-## Reporting Vulnerabilities
+## การรายงานช่องโหว่
 
-If you find a security issue, please open a GitHub issue at [krittinkhaneung/mcp-broker](https://github.com/krittinkhaneung/mcp-broker/issues) or contact the maintainer directly. Include:
+หากพบปัญหาด้านความปลอดภัย กรุณาเปิด GitHub issue ที่ [krittinkhaneung/mcp-broker](https://github.com/krittinkhaneung/mcp-broker/issues) หรือติดต่อผู้ดูแลโดยตรง โดยระบุ:
 
-- Description of the vulnerability
-- Steps to reproduce
-- Impact assessment
+- คำอธิบายช่องโหว่
+- ขั้นตอนการทำซ้ำ
+- การประเมินผลกระทบ

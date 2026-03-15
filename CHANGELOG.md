@@ -1,22 +1,22 @@
-# Changelog
+# บันทึกการเปลี่ยนแปลง
 
-All notable changes to mcp-broker are documented here.
+การเปลี่ยนแปลงสำคัญทั้งหมดของ mcp-broker บันทึกไว้ที่นี่
 
 ## [0.1.0] - 2026-03-15
 
-### Added
+### เพิ่มใหม่
 
-- **Claude Code Plugin** — install via `/plugin marketplace add krittinkhaneung/mcp-broker` + `/plugin install broker`
-- **Skills**: `/broker:status` (dashboard), `/broker:reset` (cleanup), `/broker:setup` (onboarding)
-- **Coordinator agent** (`broker-coordinator`) — multi-agent orchestration with fan-out/fan-in, task queue, retry, and progress tracking
-- **Session hooks** — auto-register on session start, auto-unregister on session end
-- **GitHub marketplace** config (`.claude-plugin/marketplace.json`)
+- **Claude Code Plugin** — ติดตั้งผ่าน `/plugin marketplace add krittinkhaneung/mcp-broker` + `/plugin install broker`
+- **คำสั่ง Slash**: `/broker:status` (แดชบอร์ด), `/broker:reset` (ล้างข้อมูล), `/broker:setup` (เริ่มต้นใช้งาน)
+- **Coordinator agent** (`broker-coordinator`) — ประสานงานหลาย agent พร้อมกระจายงาน/รวมผล, คิวงาน, ลองใหม่, และติดตามความคืบหน้า
+- **Session hooks** — ลงทะเบียนอัตโนมัติเมื่อเริ่ม session, ยกเลิกเมื่อจบ session
+- **การตั้งค่า GitHub marketplace** (`.claude-plugin/marketplace.json`)
 
-### Core (pre-plugin)
+### แกนหลัก (ก่อน plugin)
 
-- MCP server with 12 tools: register, heartbeat, unregister, send_message, poll_messages, create_channel, join_channel, leave_channel, list_channels, list_peers, get_history, purge_history
-- SQLite persistence (WAL mode, foreign keys)
-- Cursor-based polling with UNION ALL unified inbox (no N+1)
-- BrokerError typed error handling across all handlers
-- Environment-based configuration with safe defaults
-- Migrated from Node.js + better-sqlite3 to Bun + bun:sqlite
+- MCP server พร้อม 12 tools: register, heartbeat, unregister, send_message, poll_messages, create_channel, join_channel, leave_channel, list_channels, list_peers, get_history, purge_history
+- เก็บข้อมูลถาวรด้วย SQLite (WAL mode, foreign keys)
+- รับข้อความแบบ cursor ด้วย UNION ALL unified inbox (ไม่มีปัญหา N+1)
+- จัดการ error แบบมี type ด้วย BrokerError ทุก handler
+- ตั้งค่าผ่าน environment พร้อมค่าเริ่มต้นที่ปลอดภัย
+- ย้ายจาก Node.js + better-sqlite3 มาเป็น Bun + bun:sqlite

@@ -1,58 +1,53 @@
 # mcp-broker
 
-Multi-agent communication broker exposed as an [MCP](https://modelcontextprotocol.io/) server. Allows multiple AI agents (e.g. Claude instances) to discover each other, exchange messages, and coordinate via shared channels — all persisted in SQLite.
+ระบบ broker สำหรับสื่อสารระหว่าง agent หลายตัว ทำงานผ่าน [MCP](https://modelcontextprotocol.io/) server ช่วยให้ AI agent หลายตัว (เช่น Claude หลาย instance) ค้นหากัน ส่งข้อความ และประสานงานผ่าน channel ร่วมกัน — ข้อมูลทั้งหมดเก็บใน SQLite
 
-## Table of Contents
+## สารบัญ
 
-- [Why mcp-broker?](#why-mcp-broker) — ทำไมต้องมี, เทียบกับ built-in agents/teams
-- [How It Works](#how-it-works) — architecture overview
-- [Prerequisites](#prerequisites) — สิ่งที่ต้องติดตั้งก่อน
-- [Install as Claude Code Plugin](#install-as-claude-code-plugin) — วิธีติดตั้ง (plugin / manual)
-- [Usage Guide](#usage-guide) — วิธีใช้งาน (register, chat, channels, broadcast, coordinator)
-- [Use Cases](#use-cases) — 6 ตัวอย่างการใช้งานจริง
-- [Tools](#tools) — 12 MCP tools reference
-- [Configuration](#configuration) — environment variables
-- [Plugin Features](#plugin-features) — skills, coordinator agent, hooks
-- [Project Structure](#project-structure) — file layout
-- [Development](#development) — dev setup, tests, architecture, adding tools
-- [License](#license)
+- [ทำไมต้อง mcp-broker?](#ทำไมต้อง-mcp-broker) — เทียบกับ Agent/Subagent/Teams ของ Claude Code
+- [หลักการทำงาน](#หลักการทำงาน) — ภาพรวมสถาปัตยกรรม
+- [สิ่งที่ต้องติดตั้งก่อน](#สิ่งที่ต้องติดตั้งก่อน) — Bun, Claude Code
+- [วิธีติดตั้ง](#วิธีติดตั้ง) — ติดตั้งแบบ plugin หรือ manual
+- [วิธีใช้งาน](#วิธีใช้งาน) — ลงทะเบียน, แชท, channel, broadcast, coordinator
+- [ตัวอย่างการใช้งาน](#ตัวอย่างการใช้งาน) — 6 กรณีใช้งานจริง
+- [เครื่องมือ (Tools)](#เครื่องมือ-tools) — รายละเอียด 12 MCP tools
+- [การตั้งค่า](#การตั้งค่า) — ตัวแปร environment
+- [ฟีเจอร์ Plugin](#ฟีเจอร์-plugin) — skills, coordinator agent, hooks
+- [โครงสร้างโปรเจกต์](#โครงสร้างโปรเจกต์) — ผังไฟล์
+- [การพัฒนา](#การพัฒนา) — ตั้งค่า dev, ทดสอบ, สถาปัตยกรรม, เพิ่ม tool ใหม่
+- [สัญญาอนุญาต](#สัญญาอนุญาต)
 
-## Why mcp-broker?
+## ทำไมต้อง mcp-broker?
 
 Claude Code มี Agent tool, subagents, และ teams อยู่แล้ว — แล้วทำไมต้องมี broker อีก?
 
-### The Problem
+### ปัญหา
 
-Built-in multi-agent ของ Claude Code มีข้อจำกัด:
+ระบบ multi-agent ในตัวของ Claude Code มีข้อจำกัด:
 
-- **Agent/Subagent** — parent spawn child, child ทำงานเสร็จแล้ว return ผลกลับ จบ ไม่มี ongoing communication ระหว่าง agents
-- **Teams (SendMessage)** — agents คุยกันได้ แต่เป็น synchronous, ไม่มี message history, ไม่มี channels, ไม่มี presence tracking
-- **ทุก session เป็น island** — agent A ไม่รู้ว่า agent B มีอยู่ ถ้าไม่ได้ถูก spawn จาก parent เดียวกัน
+- **Agent/Subagent** — parent สร้าง child, child ทำงานเสร็จแล้วส่งผลกลับ จบ ไม่มีการสื่อสารต่อเนื่องระหว่าง agent
+- **Teams (SendMessage)** — agent คุยกันได้ แต่เป็นแบบ synchronous ไม่มีประวัติข้อความ ไม่มี channel ไม่มีการติดตามสถานะออนไลน์
+- **ทุก session เป็นเกาะแยก** — agent A ไม่รู้ว่า agent B มีอยู่ ถ้าไม่ได้ถูกสร้างจาก parent เดียวกัน
 
-### What mcp-broker Adds
+### สิ่งที่ mcp-broker เพิ่มเติม
 
-| Capability | Agent/Subagent | Teams | mcp-broker |
+| ความสามารถ | Agent/Subagent | Teams | mcp-broker |
 |------------|:-:|:-:|:-:|
-| Agent discovery (ใครออนไลน์อยู่?) | - | - | ✓ |
-| Async messaging (ส่งข้อความไว้ อีกฝั่งมาอ่านทีหลัง) | - | - | ✓ |
-| Channels (group communication) | - | - | ✓ |
-| Message history & persistence | - | - | ✓ |
-| Role-based targeting (ส่งถึง workers ทั้งหมด) | - | - | ✓ |
+| ค้นหา agent (ใครออนไลน์อยู่?) | - | - | ✓ |
+| ส่งข้อความแบบ async (ฝากไว้ อีกฝั่งมาอ่านทีหลัง) | - | - | ✓ |
+| Channel (สื่อสารแบบกลุ่ม) | - | - | ✓ |
+| ประวัติข้อความและการเก็บข้อมูลถาวร | - | - | ✓ |
+| ส่งตาม role (ส่งถึง worker ทั้งหมด) | - | - | ✓ |
 | Broadcast (ประกาศทุกคน) | - | ✓ | ✓ |
-| Cross-session communication | - | - | ✓ |
-| Presence & heartbeat | - | - | ✓ |
+| สื่อสารข้าม session | - | - | ✓ |
+| ติดตามสถานะออนไลน์ (heartbeat) | - | - | ✓ |
 
-### Use Cases
+### เมื่อไหร่ใช้อะไร
 
-- **Parallel code review** — coordinator แจก PR ให้ workers หลายตัว review พร้อมกัน รวมผลกลับ
-- **Long-running pipelines** — agent ส่งงานเข้า queue ปิด session ไป agent ตัวใหม่มารับงานต่อได้
-- **Cross-project coordination** — agents จากหลาย project directories คุยกันผ่าน broker
-- **Supervisor pattern** — supervisor คอย monitor workers, re-assign งานที่ fail, track progress
+- ถ้าแค่ต้องการมอบหมายงานแล้วรอผล → ใช้ Agent/Subagent ของ Claude Code เลย
+- ถ้าต้องการ agent หลายตัวคุยกัน, ค้นหากัน, ส่งงานแบบ async, หรือเก็บประวัติข้อความ → ใช้ mcp-broker
 
-ถ้าแค่ต้องการ spawn task แล้วรอผล → ใช้ Agent/Subagent ของ Claude Code เลย
-ถ้าต้องการ agents หลายตัวคุยกัน, discover กัน, ส่งงานแบบ async, หรือ persist messages → ใช้ mcp-broker
-
-## How It Works
+## หลักการทำงาน
 
 ```
 Agent A ──stdio──▶ ┌─────────────┐ ◀──stdio── Agent B
@@ -61,329 +56,330 @@ Agent C ──stdio──▶ │  (SQLite)   │ ◀──stdio── Agent D
                    └─────────────┘
 ```
 
-Each agent connects via stdio and uses MCP tools to:
+แต่ละ agent เชื่อมต่อผ่าน stdio และใช้ MCP tools เพื่อ:
 
-1. **Register** itself with a name and role
-2. **Discover** other online agents
-3. **Send messages** — direct, broadcast, role-targeted, or channel-based
-4. **Poll** for new messages (cursor-based, no duplicates)
-5. **Manage channels** for topic-based communication
+1. **ลงทะเบียน** ตัวเองด้วยชื่อและ role
+2. **ค้นหา** agent ที่ออนไลน์อยู่
+3. **ส่งข้อความ** — แบบตรง, broadcast, ตาม role, หรือผ่าน channel
+4. **รับข้อความ** ใหม่ (ใช้ cursor ไม่ซ้ำ)
+5. **จัดการ channel** สำหรับสื่อสารตามหัวข้อ
 
-## Prerequisites
+## สิ่งที่ต้องติดตั้งก่อน
 
-- [**Bun**](https://bun.sh/) v1.0+ — runtime (ใช้รัน TypeScript ตรง ไม่ต้อง build)
-- [**Claude Code**](https://claude.com/code) — CLI agent ของ Anthropic (ต้องรองรับ plugin system)
+- [**Bun**](https://bun.sh/) v1.0+ — runtime (รัน TypeScript ได้ตรง ไม่ต้อง build)
+- [**Claude Code**](https://claude.com/code) — CLI agent ของ Anthropic (ต้องรองรับระบบ plugin)
 
 ```bash
 # ติดตั้ง Bun (macOS / Linux)
 curl -fsSL https://bun.sh/install | bash
 
-# ตรวจสอบ version
+# ตรวจสอบเวอร์ชัน
 bun --version
 ```
 
-## Install as Claude Code Plugin
+## วิธีติดตั้ง
+
+### แบบ Plugin (แนะนำ)
 
 ```bash
-# Add the marketplace
+# เพิ่ม marketplace
 /plugin marketplace add krittinkhaneung/mcp-broker
 
-# Install the plugin
+# ติดตั้ง plugin
 /plugin install broker
 ```
 
-This gives you the MCP server (12 tools), slash commands, a coordinator agent, and session hooks — all configured automatically.
+ได้ MCP server (12 tools), คำสั่ง slash, coordinator agent, และ hooks ทั้งหมด — ตั้งค่าให้อัตโนมัติ
 
-### Manual Setup (alternative)
+### แบบ Manual
 
 ```bash
-# Clone and install
+# โคลนและติดตั้ง
 git clone https://github.com/krittinkhaneung/mcp-broker.git
 bun install
 
-# Add to Claude Code
+# เพิ่มเข้า Claude Code
 claude mcp add --transport stdio broker -- bun /path/to/mcp-broker/src/index.ts
 
-# Run tests
+# รันทดสอบ
 bun test
 ```
 
-## Usage Guide
+## วิธีใช้งาน
 
-### Basic: Register and Chat
+### พื้นฐาน: ลงทะเบียนและแชท
 
 เปิด 2 Claude Code sessions ในเครื่องเดียวกัน:
 
 **Session A:**
 ```
-> "Register as 'alice' and send a message to bob saying 'ready to start'"
+> "ลงทะเบียนชื่อ 'alice' แล้วส่งข้อความถึง bob ว่า 'พร้อมเริ่มแล้ว'"
 
-# Claude calls: register(name: "alice", role: "peer")
-# Claude calls: send_message(to: "bob", content: "ready to start")
+# Claude เรียก: register(name: "alice", role: "peer")
+# Claude เรียก: send_message(to: "bob", content: "พร้อมเริ่มแล้ว")
 ```
 
 **Session B:**
 ```
-> "Register as 'bob' and check for messages"
+> "ลงทะเบียนชื่อ 'bob' แล้วเช็คข้อความ"
 
-# Claude calls: register(name: "bob", role: "peer")
-# Claude calls: poll_messages()
-# → receives: {from: "alice", content: "ready to start"}
+# Claude เรียก: register(name: "bob", role: "peer")
+# Claude เรียก: poll_messages()
+# → ได้รับ: {from: "alice", content: "พร้อมเริ่มแล้ว"}
 ```
 
-### Channels: Group Communication
+### Channel: สื่อสารแบบกลุ่ม
 
 ```
-> "Create a channel #code-review for the team"
-# Claude calls: create_channel(name: "#code-review", purpose: "PR reviews")
+> "สร้าง channel #code-review สำหรับทีม"
+# Claude เรียก: create_channel(name: "#code-review", purpose: "รีวิว PR")
 
-> "Send to #code-review: PR #42 needs review"
-# Claude calls: send_message(to: "channel:#code-review", content: "PR #42 needs review")
+> "ส่งไปที่ #code-review: PR #42 ต้องการรีวิว"
+# Claude เรียก: send_message(to: "channel:#code-review", content: "PR #42 ต้องการรีวิว")
 ```
 
-ทุก agent ที่ join channel จะเห็นข้อความเมื่อ poll.
+ทุก agent ที่ join channel จะเห็นข้อความเมื่อ poll
 
-### Broadcast: Announce to Everyone
-
-```
-> "Broadcast to all agents: deployment starting in 5 minutes"
-# Claude calls: send_message(to: "all", content: "deployment starting in 5 minutes")
-```
-
-ทุก agent ที่ online จะได้รับข้อความ.
-
-### Role-Targeted Messaging
+### Broadcast: ประกาศถึงทุกคน
 
 ```
-> "Send to all workers: new tasks available in #task-queue"
-# Claude calls: send_message(to: "role:worker", content: "new tasks available in #task-queue")
+> "ประกาศทุก agent: จะ deploy ใน 5 นาที"
+# Claude เรียก: send_message(to: "all", content: "จะ deploy ใน 5 นาที")
 ```
 
-เฉพาะ agents ที่ register ด้วย role `worker` เท่านั้นที่จะได้รับ.
+ทุก agent ที่ออนไลน์จะได้รับข้อความ
 
-### Coordinator: Parallel Task Execution
-
-ใช้ `broker-coordinator` agent สำหรับงานที่ต้อง fan-out:
+### ส่งข้อความตาม Role
 
 ```
-> "Use broker-coordinator to review these 3 files in parallel:
+> "ส่งถึง worker ทุกตัว: มีงานใหม่ใน #task-queue"
+# Claude เรียก: send_message(to: "role:worker", content: "มีงานใหม่ใน #task-queue")
+```
+
+เฉพาะ agent ที่ลงทะเบียนด้วย role `worker` เท่านั้นที่จะได้รับ
+
+### Coordinator: ทำงานแบบขนาน
+
+ใช้ `broker-coordinator` agent สำหรับงานที่ต้องกระจาย:
+
+```
+> "ใช้ broker-coordinator รีวิว 3 ไฟล์นี้แบบขนาน:
    src/auth.ts, src/api.ts, src/db.ts"
 ```
 
 Coordinator จะ:
-1. Register ตัวเองเป็น supervisor
-2. Spawn 3 worker agents
-3. แจก 1 file ให้แต่ละ worker review
-4. รวมผล review กลับมาเป็น summary
+1. ลงทะเบียนตัวเองเป็น supervisor
+2. สร้าง worker agents 3 ตัว
+3. แจก 1 ไฟล์ให้แต่ละ worker รีวิว
+4. รวมผลรีวิวกลับมาเป็นสรุป
 
-### Discovery: Who's Online?
+### ค้นหา: ใครออนไลน์อยู่?
 
 ```
-> "List all online agents"
-# Claude calls: list_peers()
+> "แสดง agent ที่ออนไลน์ทั้งหมด"
+# Claude เรียก: list_peers()
 # → [{name: "alice", role: "peer", status: "idle", online: true}, ...]
 
-> "List only workers"
-# Claude calls: list_peers(role: "worker")
+> "แสดงเฉพาะ worker"
+# Claude เรียก: list_peers(role: "worker")
 ```
 
-`list_peers` ไม่ต้อง register ก่อนก็ใช้ได้ — เหมาะสำหรับ monitoring.
+`list_peers` ไม่ต้องลงทะเบียนก่อนก็ใช้ได้ — เหมาะสำหรับ monitoring
 
 ---
 
-## Use Cases
+## ตัวอย่างการใช้งาน
 
-### 1. Parallel Code Review
+### 1. รีวิวโค้ดแบบขนาน
 
-**สถานการณ์:** มี PR ใหญ่ ต้อง review หลายไฟล์
+**สถานการณ์:** มี PR ใหญ่ ต้องรีวิวหลายไฟล์
 
 ```
-> "Use broker-coordinator to review PR #123. Split by directory:
+> "ใช้ broker-coordinator รีวิว PR #123 แบ่งตาม directory:
    - src/api/ (REST endpoints)
    - src/services/ (business logic)
    - src/models/ (data layer)"
 ```
 
-Coordinator spawn 3 workers, แต่ละตัว focus คนละ layer, รวมผลกลับเป็น unified review.
+Coordinator สร้าง worker 3 ตัว แต่ละตัวโฟกัสคนละ layer รวมผลกลับเป็นรีวิวรวม
 
-### 2. Long-Running Pipeline
+### 2. งานระยะยาวข้าม Session
 
-**สถานการณ์:** งานที่ใช้เวลานาน ต้องส่งต่อระหว่าง sessions
+**สถานการณ์:** งานที่ใช้เวลานาน ต้องส่งต่อระหว่าง session
 
-**Session 1 (Producer):**
+**Session 1 (ผู้มอบหมาย):**
 ```
-> "Register as 'pipeline' and post these tasks to #jobs:
-   1. Migrate database schema
-   2. Update API endpoints
-   3. Write integration tests"
-```
-
-**Session 2 (Consumer — อาจเปิดทีหลัง):**
-```
-> "Register as 'worker-1', join #jobs, and pick up the next task"
-# Worker polls #jobs, เห็น task, เริ่มทำงาน
-# ทำเสร็จแล้ว post ผลกลับไป #jobs
+> "ลงทะเบียนชื่อ 'pipeline' แล้วโพสต์งานเหล่านี้ไปที่ #jobs:
+   1. ย้ายโครงสร้างฐานข้อมูล
+   2. อัปเดต API endpoints
+   3. เขียน integration tests"
 ```
 
-Messages persist ใน SQLite — ไม่หายแม้ session เดิมปิดไปแล้ว.
+**Session 2 (ผู้รับงาน — อาจเปิดทีหลัง):**
+```
+> "ลงทะเบียนชื่อ 'worker-1' เข้าร่วม #jobs แล้วรับงานถัดไป"
+# Worker poll #jobs เห็นงาน เริ่มทำ
+# ทำเสร็จแล้วโพสต์ผลกลับไป #jobs
+```
 
-### 3. Cross-Project Coordination
+ข้อความเก็บใน SQLite — ไม่หายแม้ session เดิมจะปิดไปแล้ว
 
-**สถานการณ์:** ทำงาน 2 projects ที่เกี่ยวข้องกัน (เช่น frontend + backend)
+### 3. ประสานงานข้ามโปรเจกต์
+
+**สถานการณ์:** ทำงาน 2 โปรเจกต์ที่เกี่ยวข้องกัน (เช่น frontend + backend)
 
 **Terminal 1 (`~/frontend`):**
 ```
-> "Register as 'frontend-dev'. When the API contract changes,
-   send me a message with the new endpoints."
+> "ลงทะเบียนชื่อ 'frontend-dev'
+   ถ้า API contract เปลี่ยน ส่งข้อความบอก endpoint ใหม่ด้วย"
 ```
 
 **Terminal 2 (`~/backend`):**
 ```
-> "Register as 'backend-dev'. I just added POST /api/tasks.
-   Send to frontend-dev: 'new endpoint POST /api/tasks added,
+> "ลงทะเบียนชื่อ 'backend-dev' เพิ่งเพิ่ม POST /api/tasks
+   ส่งถึง frontend-dev: 'endpoint ใหม่ POST /api/tasks
    request body: {title: string, priority: number}'"
 ```
 
-ทั้ง 2 projects ใช้ broker.db เดียวกัน — คุยกันข้ามโปรเจกต์ได้.
+ทั้ง 2 โปรเจกต์ใช้ broker.db เดียวกัน — คุยกันข้ามโปรเจกต์ได้
 
-### 4. Supervisor + Workers Pattern
+### 4. รูปแบบ Supervisor + Workers
 
-**สถานการณ์:** ต้องการ 1 agent คอย monitor และ manage workers หลายตัว
-
-```
-> "Register as 'supervisor' with role supervisor.
-   Create channel #status.
-   Poll #status every time you get a chance —
-   if any worker reports 'failed', re-assign their task."
-```
-
-Workers report สถานะเข้า `#status`:
-```
-> "Register as 'worker-1' with role worker.
-   Join #status. Post status updates as you work.
-   When done, send to supervisor: 'task-A complete'."
-```
-
-### 5. Multi-Agent Brainstorm
-
-**สถานการณ์:** ต้องการหลาย perspectives สำหรับ design decision
+**สถานการณ์:** ต้องการ 1 agent คอย monitor และจัดการ worker หลายตัว
 
 ```
-> "Use broker-coordinator to brainstorm database design.
-   Spawn 3 agents with different perspectives:
-   - Agent 1: optimize for read performance
-   - Agent 2: optimize for write throughput
-   - Agent 3: optimize for simplicity and maintainability
-   Collect all proposals and synthesize the best approach."
+> "ลงทะเบียนชื่อ 'supervisor' ด้วย role supervisor
+   สร้าง channel #status
+   คอย poll #status — ถ้า worker ไหนรายงาน 'failed' ให้มอบหมายงานใหม่"
 ```
 
-### 6. Test Matrix Runner
+Worker รายงานสถานะเข้า `#status`:
+```
+> "ลงทะเบียนชื่อ 'worker-1' ด้วย role worker
+   เข้าร่วม #status โพสต์สถานะขณะทำงาน
+   ทำเสร็จแล้วส่งถึง supervisor: 'task-A เสร็จแล้ว'"
+```
 
-**สถานการณ์:** run tests หลาย environments พร้อมกัน
+### 5. ระดมสมองหลายมุมมอง
+
+**สถานการณ์:** ต้องการหลายมุมมองสำหรับตัดสินใจเรื่องการออกแบบ
 
 ```
-> "Use broker-coordinator to run the test suite across configurations:
+> "ใช้ broker-coordinator ระดมสมองเรื่องออกแบบฐานข้อมูล
+   สร้าง 3 agent ที่มีมุมมองต่างกัน:
+   - Agent 1: เน้นประสิทธิภาพการอ่าน
+   - Agent 2: เน้นปริมาณการเขียน
+   - Agent 3: เน้นความเรียบง่ายและดูแลง่าย
+   รวบรวมข้อเสนอทั้งหมดแล้วสังเคราะห์แนวทางที่ดีที่สุด"
+```
+
+### 6. รันชุดทดสอบหลายสภาพแวดล้อม
+
+**สถานการณ์:** รันทดสอบหลาย environment พร้อมกัน
+
+```
+> "ใช้ broker-coordinator รันชุดทดสอบในหลายการตั้งค่า:
    - Node 20 + PostgreSQL 15
    - Node 22 + PostgreSQL 16
    - Bun + SQLite
-   Report which combinations pass/fail."
+   รายงานว่าชุดค่าไหนผ่าน/ไม่ผ่าน"
 ```
 
 ---
 
-## Tools
+## เครื่องมือ (Tools)
 
-### Registration & Presence
+### ลงทะเบียนและติดตามสถานะ
 
-| Tool | Description |
-|------|-------------|
-| `register` | Register an agent with `name`, optional `role` (supervisor/worker/peer), and `metadata` |
-| `heartbeat` | Update presence; optionally set status (idle/busy/blocked). Returns online peer count |
-| `unregister` | Disconnect the current agent |
+| เครื่องมือ | คำอธิบาย |
+|-----------|---------|
+| `register` | ลงทะเบียน agent ด้วย `name`, `role` (supervisor/worker/peer), และ `metadata` |
+| `heartbeat` | อัปเดตสถานะออนไลน์ เปลี่ยน status (idle/busy/blocked) ได้ ส่งคืนจำนวน peer ที่ออนไลน์ |
+| `unregister` | ยกเลิกการลงทะเบียน agent ปัจจุบัน |
 
-### Messaging
+### ส่งข้อความ
 
-| Tool | Description |
-|------|-------------|
-| `send_message` | Send to an agent name (DM), `"all"` (broadcast), `"role:<role>"` (role-targeted), or `"channel:#name"` |
-| `poll_messages` | Fetch unread messages across all sources, or filter by channel. Cursor-based — no duplicates |
+| เครื่องมือ | คำอธิบาย |
+|-----------|---------|
+| `send_message` | ส่งถึงชื่อ agent (DM), `"all"` (broadcast), `"role:<role>"` (ตาม role), หรือ `"channel:#name"` (ผ่าน channel) |
+| `poll_messages` | ดึงข้อความใหม่จากทุกแหล่ง หรือกรองเฉพาะ channel ใช้ cursor ไม่ซ้ำ |
 
-### Channels
+### Channel
 
-| Tool | Description |
-|------|-------------|
-| `create_channel` | Create a channel (name must start with `#`) with optional purpose |
-| `join_channel` | Join a channel |
-| `leave_channel` | Leave a channel |
-| `list_channels` | List all channels with member counts |
+| เครื่องมือ | คำอธิบาย |
+|-----------|---------|
+| `create_channel` | สร้าง channel (ชื่อต้องขึ้นต้นด้วย `#`) พร้อมวัตถุประสงค์ |
+| `join_channel` | เข้าร่วม channel |
+| `leave_channel` | ออกจาก channel |
+| `list_channels` | แสดง channel ทั้งหมดพร้อมจำนวนสมาชิก |
 
-### Discovery & History
+### ค้นหาและประวัติ
 
-| Tool | Description |
-|------|-------------|
-| `list_peers` | List all agents with online status. Optional role filter. Works without registration |
-| `get_history` | Query message history with peer, channel, sequence, and limit filters |
-| `purge_history` | Delete messages before a given ISO 8601 date |
+| เครื่องมือ | คำอธิบาย |
+|-----------|---------|
+| `list_peers` | แสดง agent ทั้งหมดพร้อมสถานะออนไลน์ กรองตาม role ได้ ใช้ได้โดยไม่ต้องลงทะเบียน |
+| `get_history` | ค้นหาประวัติข้อความ กรองตาม peer, channel, ลำดับ, และจำนวน |
+| `purge_history` | ลบข้อความที่เก่ากว่าวันที่กำหนด (ISO 8601) |
 
-## Configuration
+## การตั้งค่า
 
-All settings are configurable via environment variables:
+ตั้งค่าทั้งหมดผ่านตัวแปร environment:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `BROKER_DB_PATH` | `~/.claude/mcp-broker/broker.db` | SQLite database path |
-| `BROKER_HEARTBEAT_TTL` | `60000` | Milliseconds before an agent is considered offline |
-| `BROKER_MAX_MESSAGE_LENGTH` | `10000` | Max message content length (chars) |
-| `BROKER_PRUNE_AFTER_DAYS` | `7` | Auto-prune stale agents after this many days |
-| `BROKER_MAX_AGENTS` | `100` | Maximum registered agents |
-| `BROKER_MAX_CHANNELS` | `50` | Maximum channels |
+| ตัวแปร | ค่าเริ่มต้น | คำอธิบาย |
+|--------|-----------|---------|
+| `BROKER_DB_PATH` | `~/.claude/mcp-broker/broker.db` | ตำแหน่งไฟล์ฐานข้อมูล SQLite |
+| `BROKER_HEARTBEAT_TTL` | `60000` | มิลลิวินาทีก่อนถือว่า agent ออฟไลน์ |
+| `BROKER_MAX_MESSAGE_LENGTH` | `10000` | ความยาวเนื้อหาข้อความสูงสุด (ตัวอักษร) |
+| `BROKER_PRUNE_AFTER_DAYS` | `7` | ลบ agent ที่ไม่ใช้งานอัตโนมัติหลังจำนวนวันนี้ |
+| `BROKER_MAX_AGENTS` | `100` | จำนวน agent สูงสุดที่ลงทะเบียนได้ |
+| `BROKER_MAX_CHANNELS` | `50` | จำนวน channel สูงสุด |
 
-## Plugin Features
+## ฟีเจอร์ Plugin
 
-### Skills (Slash Commands)
+### คำสั่ง Slash
 
-| Command | Description |
-|---------|-------------|
-| `/broker:status` | Dashboard — online agents, channels, message stats |
-| `/broker:reset` | Clean up old messages, prune stale agents, or full reset |
-| `/broker:setup` | First-time health check and onboarding guide |
+| คำสั่ง | คำอธิบาย |
+|--------|---------|
+| `/broker:status` | แดชบอร์ด — agent ที่ออนไลน์, channel, สถิติข้อความ |
+| `/broker:reset` | ล้างข้อความเก่า, ตัด agent ที่หมดอายุ, หรือรีเซ็ตทั้งหมด |
+| `/broker:setup` | ตรวจสอบสุขภาพระบบและคู่มือเริ่มต้นใช้งาน |
 
 ### Coordinator Agent
 
-Use `broker-coordinator` for multi-agent orchestration:
-- Fan-out tasks across N worker agents
-- Task queue with automatic retry on failure
-- Progress tracking and result aggregation
+ใช้ `broker-coordinator` สำหรับประสานงานหลาย agent:
+- กระจายงานให้ worker agent หลายตัวทำพร้อมกัน
+- คิวงานพร้อมลองใหม่อัตโนมัติเมื่อล้มเหลว
+- ติดตามความคืบหน้าและรวบรวมผลลัพธ์
 
 ### Session Hooks
 
-- **SessionStart** — auto-registers your Claude session with the broker
-- **SessionEnd** — auto-unregisters on disconnect
+- **เริ่ม Session** — ลงทะเบียน agent อัตโนมัติเมื่อเปิด session
+- **จบ Session** — ยกเลิกการลงทะเบียนอัตโนมัติเมื่อปิด
 
-## Project Structure
+## โครงสร้างโปรเจกต์
 
 ```
 .claude-plugin/
-  plugin.json       Plugin manifest
-  marketplace.json  GitHub marketplace listing
-.mcp.json           MCP server config (auto-configured by plugin)
+  plugin.json       ไฟล์ manifest ของ plugin
+  marketplace.json  รายการสำหรับ GitHub marketplace
+.mcp.json           การตั้งค่า MCP server (ตั้งค่าอัตโนมัติโดย plugin)
 skills/
   status/SKILL.md   /broker:status
   reset/SKILL.md    /broker:reset
   setup/SKILL.md    /broker:setup
 agents/
-  broker-coordinator.md   Multi-agent orchestration agent
+  broker-coordinator.md   agent ประสานงานหลายตัว
 hooks/
-  hooks.json        Session start/end auto-registration
+  hooks.json        ลงทะเบียนอัตโนมัติเมื่อเริ่ม/จบ session
 src/
-  index.ts          MCP server entry point — registers all 12 tools
-  config.ts         Environment-based configuration with defaults
-  errors.ts         BrokerError typed error class
-  db.ts             SQLite schema initialization (WAL mode, FK constraints)
-  state.ts          In-process session state (current agent singleton)
-  presence.ts       Heartbeat, online detection, stale agent pruning
-  types.ts          Core interfaces (Agent, Channel, Message, SessionAgent)
-  validators.ts     Input validation (name, channel, role, content)
+  index.ts          จุดเริ่มต้น MCP server — ลงทะเบียน 12 tools
+  config.ts         การตั้งค่าจาก environment พร้อมค่าเริ่มต้น
+  errors.ts         คลาส BrokerError สำหรับจัดการ error
+  db.ts             สร้างโครงสร้าง SQLite (WAL mode, foreign keys)
+  state.ts          สถานะ session ในหน่วยความจำ (agent ปัจจุบัน)
+  presence.ts       heartbeat, ตรวจสอบออนไลน์, ตัด agent หมดอายุ
+  types.ts          interface หลัก (Agent, Channel, Message, SessionAgent)
+  validators.ts     ตรวจสอบข้อมูลนำเข้า (ชื่อ, channel, role, เนื้อหา)
   tools/
     register.ts     register, heartbeat, unregister
     messaging.ts    send_message, poll_messages
@@ -391,18 +387,18 @@ src/
     peers.ts        list_peers
     history.ts      get_history, purge_history
 tests/
-  helpers.ts        In-memory SQLite test utilities
-  *.test.ts         Full test coverage per module
+  helpers.ts        เครื่องมือทดสอบ SQLite ในหน่วยความจำ
+  *.test.ts         ทดสอบครบทุกโมดูล
 ```
 
-## Development
+## การพัฒนา
 
-### Prerequisites
+### สิ่งที่ต้องมี
 
 - [Bun](https://bun.sh/) v1.0+
 - Git
 
-### Setup
+### ตั้งค่า
 
 ```bash
 git clone https://github.com/krittinkhaneung/mcp-broker.git
@@ -410,19 +406,19 @@ cd mcp-broker
 bun install
 ```
 
-### Commands
+### คำสั่งที่ใช้บ่อย
 
 ```bash
-bun test              # run all tests (in-memory SQLite)
-bun test --watch      # run tests in watch mode
-bun run build         # compile TypeScript to dist/
-bun run dev           # compile with --watch
-bun src/index.ts      # start MCP server directly (stdio)
+bun test              # รันทดสอบทั้งหมด (SQLite ในหน่วยความจำ)
+bun test --watch      # รันทดสอบแบบ watch mode
+bun run build         # คอมไพล์ TypeScript ไปที่ dist/
+bun run dev           # คอมไพล์แบบ --watch
+bun src/index.ts      # เริ่ม MCP server ตรง (stdio)
 ```
 
-### Running Tests
+### การรันทดสอบ
 
-Tests ใช้ in-memory SQLite — ไม่ต้องตั้งค่า database:
+ใช้ SQLite ในหน่วยความจำ — ไม่ต้องตั้งค่าฐานข้อมูล:
 
 ```bash
 $ bun test
@@ -437,21 +433,21 @@ bun test v1.x.x
  ✓ tests/wrapHandler.test.ts
 ```
 
-### Adding a New Tool
+### เพิ่ม Tool ใหม่
 
 1. สร้าง handler ใน `src/tools/` (ดูตัวอย่างจาก `peers.ts`)
-2. เพิ่ม test ใน `tests/`
-3. Wire tool เข้า `src/index.ts` ด้วย `server.registerTool()`
-4. อัพเดต README tools table
+2. เพิ่มไฟล์ทดสอบใน `tests/`
+3. ลงทะเบียน tool ใน `src/index.ts` ด้วย `server.registerTool()`
+4. อัปเดตตาราง tools ใน README
 
-### Project Architecture
+### สถาปัตยกรรมโปรเจกต์
 
 ```
 MCP Client (Claude) ──stdio──▶ index.ts (MCP Server)
                                   │
-                                  ├─ tools/register.ts   ──▶ state.ts (session singleton)
+                                  ├─ tools/register.ts   ──▶ state.ts (สถานะ session)
                                   ├─ tools/messaging.ts  ──▶ presence.ts (heartbeat)
-                                  ├─ tools/channels.ts   ──▶ validators.ts (input checks)
+                                  ├─ tools/channels.ts   ──▶ validators.ts (ตรวจสอบข้อมูล)
                                   ├─ tools/peers.ts      ──▶ errors.ts (BrokerError)
                                   └─ tools/history.ts    ──▶ db.ts (SQLite)
                                                               │
@@ -459,28 +455,28 @@ MCP Client (Claude) ──stdio──▶ index.ts (MCP Server)
                                                           broker.db
 ```
 
-### Tech Stack
+### เทคโนโลยีที่ใช้
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | [Bun](https://bun.sh/) — runs TypeScript directly, no build step |
-| Database | `bun:sqlite` — built-in SQLite with WAL mode |
+| ส่วนประกอบ | เทคโนโลยี |
+|-----------|----------|
+| Runtime | [Bun](https://bun.sh/) — รัน TypeScript ได้ตรง ไม่ต้อง build |
+| ฐานข้อมูล | `bun:sqlite` — SQLite ในตัว พร้อม WAL mode |
 | MCP Framework | `@modelcontextprotocol/sdk` — stdio transport |
-| Validation | [Zod](https://zod.dev/) — input schema validation |
-| Testing | `bun:test` — built-in test runner with in-memory SQLite |
+| ตรวจสอบข้อมูล | [Zod](https://zod.dev/) — ตรวจสอบ schema |
+| ทดสอบ | `bun:test` — ตัวรันทดสอบในตัว พร้อม SQLite ในหน่วยความจำ |
 
 ### Dependencies
 
 **Runtime:**
 - `@modelcontextprotocol/sdk` — MCP server framework
-- `uuid` — unique ID generation
-- `zod` — schema validation
+- `uuid` — สร้าง ID ที่ไม่ซ้ำ
+- `zod` — ตรวจสอบ schema
 
 **Dev:**
-- `typescript` — type checking and compilation
-- `bun-types` — Bun API type definitions
-- `@types/uuid` — UUID type definitions
+- `typescript` — ตรวจสอบ type และคอมไพล์
+- `bun-types` — type definitions สำหรับ Bun API
+- `@types/uuid` — type definitions สำหรับ UUID
 
-## License
+## สัญญาอนุญาต
 
 MIT
