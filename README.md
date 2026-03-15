@@ -2,6 +2,41 @@
 
 Multi-agent communication broker exposed as an [MCP](https://modelcontextprotocol.io/) server. Allows multiple AI agents (e.g. Claude instances) to discover each other, exchange messages, and coordinate via shared channels — all persisted in SQLite.
 
+## Why mcp-broker?
+
+Claude Code มี Agent tool, subagents, และ teams อยู่แล้ว — แล้วทำไมต้องมี broker อีก?
+
+### The Problem
+
+Built-in multi-agent ของ Claude Code มีข้อจำกัด:
+
+- **Agent/Subagent** — parent spawn child, child ทำงานเสร็จแล้ว return ผลกลับ จบ ไม่มี ongoing communication ระหว่าง agents
+- **Teams (SendMessage)** — agents คุยกันได้ แต่เป็น synchronous, ไม่มี message history, ไม่มี channels, ไม่มี presence tracking
+- **ทุก session เป็น island** — agent A ไม่รู้ว่า agent B มีอยู่ ถ้าไม่ได้ถูก spawn จาก parent เดียวกัน
+
+### What mcp-broker Adds
+
+| Capability | Agent/Subagent | Teams | mcp-broker |
+|------------|:-:|:-:|:-:|
+| Agent discovery (ใครออนไลน์อยู่?) | - | - | ✓ |
+| Async messaging (ส่งข้อความไว้ อีกฝั่งมาอ่านทีหลัง) | - | - | ✓ |
+| Channels (group communication) | - | - | ✓ |
+| Message history & persistence | - | - | ✓ |
+| Role-based targeting (ส่งถึง workers ทั้งหมด) | - | - | ✓ |
+| Broadcast (ประกาศทุกคน) | - | ✓ | ✓ |
+| Cross-session communication | - | - | ✓ |
+| Presence & heartbeat | - | - | ✓ |
+
+### Use Cases
+
+- **Parallel code review** — coordinator แจก PR ให้ workers หลายตัว review พร้อมกัน รวมผลกลับ
+- **Long-running pipelines** — agent ส่งงานเข้า queue ปิด session ไป agent ตัวใหม่มารับงานต่อได้
+- **Cross-project coordination** — agents จากหลาย project directories คุยกันผ่าน broker
+- **Supervisor pattern** — supervisor คอย monitor workers, re-assign งานที่ fail, track progress
+
+ถ้าแค่ต้องการ spawn task แล้วรอผล → ใช้ Agent/Subagent ของ Claude Code เลย
+ถ้าต้องการ agents หลายตัวคุยกัน, discover กัน, ส่งงานแบบ async, หรือ persist messages → ใช้ mcp-broker
+
 ## How It Works
 
 ```
