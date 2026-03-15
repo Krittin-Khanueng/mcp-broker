@@ -13,6 +13,8 @@ import {
 } from './tools/channels.js';
 import { handleListPeers } from './tools/peers.js';
 import { handleGetHistory, handlePurgeHistory } from './tools/history.js';
+import { handleSpawnAgent, handleStopAgent, handleListProfiles } from './tools/spawn.js';
+import { shutdownAllAgents } from './spawner.js';
 import { BrokerError } from './errors.js';
 
 const config = loadConfig();
@@ -196,7 +198,51 @@ server.registerTool(
   async ({ before_date }) => wrapHandler(() => handlePurgeHistory(db, { before_date })),
 );
 
+// --- Profiles & Spawner ---
+
+server.registerTool(
+  'spawn_agent',
+  {
+    title: 'Spawn Agent',
+    description: 'Spawn a Claude Code instance from a pre-defined profile',
+    inputSchema: {
+      profile: z.string().describe('Profile name from profiles.yml'),
+      task: z.string().optional().describe('Task/prompt for the spawned agent'),
+      cwd: z.string().optional().describe('Working directory override'),
+    },
+  },
+  async ({ profile, task, cwd }) => wrapHandler(() => handleSpawnAgent(db, config, { profile, task, cwd })),
+);
+
+server.registerTool(
+  'stop_agent',
+  {
+    title: 'Stop Agent',
+    description: 'Stop a spawned agent by name',
+    inputSchema: {
+      name: z.string().describe('Agent name to stop'),
+    },
+    annotations: { destructiveHint: true },
+  },
+  async ({ name }) => wrapHandler(() => handleStopAgent(db, config, { name })),
+);
+
+server.registerTool(
+  'list_profiles',
+  {
+    title: 'List Profiles',
+    description: 'List all available agent profiles and their running status',
+    inputSchema: {},
+    annotations: { readOnlyHint: true },
+  },
+  async () => wrapHandler(() => handleListProfiles(db, config)),
+);
+
 // --- Start server ---
 
 const transport = new StdioServerTransport();
 await server.connect(transport);
+
+// Cleanup spawned agents on shutdown
+process.on('SIGTERM', () => shutdownAllAgents(db));
+process.on('SIGINT', () => shutdownAllAgents(db));
