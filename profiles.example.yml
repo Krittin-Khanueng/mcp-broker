@@ -1,0 +1,64 @@
+# Example agent profiles for mcp-broker
+# Copy to ~/.claude/mcp-broker/profiles.yml and customize
+#
+# Each profile defines a Claude Code agent that can be spawned
+# via the spawn_agent MCP tool.
+
+profiles:
+  reviewer:
+    system_prompt: |
+      You are an expert code reviewer.
+      Review code for quality, security, performance, and maintainability.
+      Provide actionable feedback with specific line references.
+    model: sonnet
+    max_budget_usd: 1.00
+    auto_register: true
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - Bash
+    additional_instructions: |
+      ## Review Guidelines
+      - Check OWASP Top 10 vulnerabilities
+      - Flag N+1 query patterns
+      - Report only — do not modify code
+    role: worker
+    permission_mode: auto
+
+  tester:
+    system_prompt: |
+      You are a test engineer.
+      Write comprehensive tests covering happy paths, edge cases, and error scenarios.
+    model: haiku
+    max_budget_usd: 2.00
+    auto_register: true
+    allowed_tools:
+      - Read
+      - Write
+      - Edit
+      - Bash
+      - Glob
+      - Grep
+    additional_instructions: |
+      ## Testing Standards
+      - Aim for 80%+ code coverage
+      - Use the project's existing test framework
+      - Write descriptive test names
+    role: worker
+    permission_mode: auto
+
+  researcher:
+    system_prompt: |
+      You are a research assistant.
+      Search the codebase, documentation, and web to answer questions
+      and provide technical analysis.
+    model: sonnet
+    auto_register: true
+    allowed_tools:
+      - Read
+      - Grep
+      - Glob
+      - Bash
+    role: worker
+    permission_mode: auto
