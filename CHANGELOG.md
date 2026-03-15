@@ -2,6 +2,21 @@
 
 การเปลี่ยนแปลงสำคัญทั้งหมดของ mcp-broker บันทึกไว้ที่นี่
 
+## [0.3.1] - 2026-03-16
+
+### เพิ่มใหม่
+
+- **Stream Progress** — `runAgentInBackground` capture `session_id` จาก SDK init message + track tool use count/last activity ลง DB
+- **Session Resume** — `spawn_agent` tool รับ `resume: true` เพื่อ resume จาก session เดิมแทนเริ่มใหม่ (SDK `resume` option)
+- **Monitoring Hooks** — ทุก spawned agent ได้ `PostToolUse` hook อัตโนมัติ log tool name + timestamp ลง `agent_tool_log` table
+- **MCP tool ใหม่: `get_agent_status`** — query progress ของ spawned agent (running, tool_use_count, last_activity, session_id, recent_tools, uptime_ms) — รวมเป็น 16 tools
+- **DB: `agent_tool_log` table** — เก็บ log tool call ของ spawned agents
+- **DB: `session_id`, `last_activity` columns** ใน agents table
+
+### เปลี่ยนแปลง
+
+- `persistSession` เปลี่ยนเป็น `true` (จากเดิม `false`) เพื่อรองรับ session resume
+
 ## [0.3.0] - 2026-03-16
 
 ### เปลี่ยนแปลง (Breaking)

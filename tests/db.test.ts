@@ -13,6 +13,7 @@ describe('Database', () => {
       .all() as { name: string }[];
     const names = tables.map((t) => t.name).filter((n) => !n.startsWith('sqlite_'));
     expect(names).toEqual([
+      'agent_tool_log',
       'agents',
       'channel_members',
       'channels',

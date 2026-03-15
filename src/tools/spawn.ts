@@ -2,18 +2,22 @@ import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../config.js';
 import type { Profile } from '../types.js';
 import { loadProfiles } from '../profiles.js';
-import { spawnAgent, stopAgent } from '../spawner.js';
+import { spawnAgent, stopAgent, getAgentStatus } from '../spawner.js';
 import { requireAgent, getSpawnedAgents } from '../state.js';
-import { isOnline } from '../presence.js';
 import { BrokerError } from '../errors.js';
 
 interface SpawnAgentParams {
   profile: string;
   task?: string;
   cwd?: string;
+  resume?: boolean;
 }
 
 interface StopAgentParams {
+  name: string;
+}
+
+interface AgentStatusParams {
   name: string;
 }
 
@@ -30,7 +34,7 @@ export function handleSpawnAgent(
     throw new BrokerError('profile_not_found', `"${params.profile}" not in profiles.yml`);
   }
 
-  return spawnAgent(db, config, params.profile, profile, params.task, params.cwd);
+  return spawnAgent(db, config, params.profile, profile, params.task, params.cwd, params.resume);
 }
 
 export function handleStopAgent(
@@ -40,6 +44,14 @@ export function handleStopAgent(
 ): Record<string, unknown> {
   requireAgent();
   return stopAgent(db, params.name);
+}
+
+export function handleGetAgentStatus(
+  db: Database,
+  params: AgentStatusParams,
+): Record<string, unknown> {
+  requireAgent();
+  return getAgentStatus(db, params.name);
 }
 
 export function handleListProfiles(

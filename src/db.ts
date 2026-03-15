@@ -57,17 +57,33 @@ export function initDb(dbPath: string): Database {
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
 
-  // Migrate: add profile columns if not present
+  // Migrate: add columns if not present
   const cols = db
     .prepare("SELECT name FROM pragma_table_info('agents')")
     .all() as { name: string }[];
-  const colNames = cols.map((c) => c.name);
+  const colNames = new Set(cols.map((c) => c.name));
 
-  if (!colNames.includes('profile')) {
+  if (!colNames.has('profile')) {
     db.exec('ALTER TABLE agents ADD COLUMN pid INTEGER');
     db.exec('ALTER TABLE agents ADD COLUMN profile TEXT');
     db.exec('ALTER TABLE agents ADD COLUMN spawned_by TEXT');
   }
+
+  if (!colNames.has('session_id')) {
+    db.exec('ALTER TABLE agents ADD COLUMN session_id TEXT');
+    db.exec('ALTER TABLE agents ADD COLUMN last_activity TEXT');
+  }
+
+  // Agent tool log table for monitoring
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS agent_tool_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      agent_name TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_agent_tool_log_name ON agent_tool_log(agent_name, created_at DESC);
+  `);
 
   return db;
 }

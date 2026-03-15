@@ -58,6 +58,9 @@ export interface SpawnedAgent {
   abortController: AbortController;
   completionPromise: Promise<AgentResult>;
   running: boolean;
+  sessionId?: string;
+  toolUseCount: number;
+  lastActivity?: string;
 }
 
 export interface AgentResult {

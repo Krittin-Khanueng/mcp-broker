@@ -13,7 +13,7 @@ import {
 } from './tools/channels.js';
 import { handleListPeers } from './tools/peers.js';
 import { handleGetHistory, handlePurgeHistory } from './tools/history.js';
-import { handleSpawnAgent, handleStopAgent, handleListProfiles } from './tools/spawn.js';
+import { handleSpawnAgent, handleStopAgent, handleListProfiles, handleGetAgentStatus } from './tools/spawn.js';
 import { shutdownAllAgents } from './spawner.js';
 import { BrokerError } from './errors.js';
 
@@ -209,9 +209,10 @@ server.registerTool(
       profile: z.string().describe('Profile name from profiles.yml'),
       task: z.string().optional().describe('Task/prompt for the spawned agent'),
       cwd: z.string().optional().describe('Working directory override'),
+      resume: z.boolean().optional().describe('Resume from previous session instead of starting fresh'),
     },
   },
-  async ({ profile, task, cwd }) => wrapHandler(() => handleSpawnAgent(db, config, { profile, task, cwd })),
+  async ({ profile, task, cwd, resume }) => wrapHandler(() => handleSpawnAgent(db, config, { profile, task, cwd, resume })),
 );
 
 server.registerTool(
@@ -225,6 +226,19 @@ server.registerTool(
     annotations: { destructiveHint: true },
   },
   async ({ name }) => wrapHandler(() => handleStopAgent(db, config, { name })),
+);
+
+server.registerTool(
+  'get_agent_status',
+  {
+    title: 'Get Agent Status',
+    description: 'Get detailed status of a spawned agent including progress, tool usage, and session info',
+    inputSchema: {
+      name: z.string().describe('Agent name to query'),
+    },
+    annotations: { readOnlyHint: true },
+  },
+  async ({ name }) => wrapHandler(() => handleGetAgentStatus(db, { name })),
 );
 
 server.registerTool(

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'bun:test';
-import { buildQueryOptions, stopAgent } from '../src/spawner.js';
+import { buildQueryOptions, stopAgent, getAgentStatus } from '../src/spawner.js';
 import type { Profile } from '../src/types.js';
 import { MODEL_MAP } from '../src/types.js';
 import { createTestDb } from './helpers.js';
@@ -103,9 +103,9 @@ describe('buildQueryOptions', () => {
     expect(broker.env.BROKER_DB_PATH).toBe('/tmp/test.db');
   });
 
-  it('sets persistSession to false', () => {
+  it('enables persistSession for session resume support', () => {
     const { options } = buildQueryOptions('reviewer', baseProfile, '/tmp/test.db');
-    expect(options.persistSession).toBe(false);
+    expect(options.persistSession).toBe(true);
   });
 
   it('maps permission_mode auto to default', () => {
@@ -118,6 +118,16 @@ describe('buildQueryOptions', () => {
     const { options } = buildQueryOptions('reviewer', profile, '/tmp/test.db');
     expect(options.permissionMode).toBe('bypassPermissions');
     expect(options.allowDangerouslySkipPermissions).toBe(true);
+  });
+
+  it('includes resume session ID when provided', () => {
+    const { options } = buildQueryOptions('reviewer', baseProfile, '/tmp/test.db', undefined, undefined, 'session-123');
+    expect(options.resume).toBe('session-123');
+  });
+
+  it('omits resume when not provided', () => {
+    const { options } = buildQueryOptions('reviewer', baseProfile, '/tmp/test.db');
+    expect(options.resume).toBeUndefined();
   });
 });
 
@@ -184,6 +194,7 @@ describe('stopAgent', () => {
       abortController,
       completionPromise: Promise.resolve({ subtype: 'success' }),
       running: true,
+      toolUseCount: 0,
     });
 
     db.prepare(
@@ -194,5 +205,69 @@ describe('stopAgent', () => {
     expect(result.stopped).toBe(true);
     expect(abortController.signal.aborted).toBe(true);
     expect(getSpawnedAgents().has('test-agent')).toBe(false);
+  });
+});
+
+describe('getAgentStatus', () => {
+  beforeEach(() => {
+    db = createTestDb();
+    getSpawnedAgents().clear();
+  });
+
+  it('returns status for a running agent', () => {
+    addSpawnedAgent('test-agent', {
+      profile: 'test-agent',
+      startedAt: new Date(),
+      abortController: new AbortController(),
+      completionPromise: Promise.resolve({ subtype: 'success' }),
+      running: true,
+      toolUseCount: 5,
+      sessionId: 'session-abc',
+      lastActivity: 'Read',
+    });
+
+    db.prepare(
+      'INSERT INTO agents (id, name, role, status, last_heartbeat, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(uuidv4(), 'test-agent', 'worker', 'idle', Date.now(), Date.now(), Date.now());
+
+    const status = getAgentStatus(db, 'test-agent');
+    expect(status.running).toBe(true);
+    expect(status.tool_use_count).toBe(5);
+    expect(status.session_id).toBe('session-abc');
+    expect(status.last_activity).toBe('Read');
+    expect(status.uptime_ms).toBeGreaterThanOrEqual(0);
+  });
+
+  it('returns status for a stopped agent from DB', () => {
+    const now = Date.now();
+    db.prepare(
+      'INSERT INTO agents (id, name, role, status, last_heartbeat, created_at, updated_at, session_id, last_activity) VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?)'
+    ).run(uuidv4(), 'stopped-agent', 'worker', 'idle', now, now, 'session-xyz', 'Bash');
+
+    const status = getAgentStatus(db, 'stopped-agent');
+    expect(status.running).toBe(false);
+    expect(status.session_id).toBe('session-xyz');
+    expect(status.last_activity).toBe('Bash');
+  });
+
+  it('throws for unknown agent', () => {
+    expect(() => getAgentStatus(db, 'nonexistent')).toThrow();
+  });
+
+  it('returns recent tool log entries', () => {
+    db.prepare(
+      'INSERT INTO agents (id, name, role, status, last_heartbeat, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, ?, ?)'
+    ).run(uuidv4(), 'log-agent', 'worker', 'idle', Date.now(), Date.now());
+
+    const now = Date.now();
+    db.prepare('INSERT INTO agent_tool_log (agent_name, tool_name, created_at) VALUES (?, ?, ?)').run('log-agent', 'Read', now - 2000);
+    db.prepare('INSERT INTO agent_tool_log (agent_name, tool_name, created_at) VALUES (?, ?, ?)').run('log-agent', 'Edit', now - 1000);
+    db.prepare('INSERT INTO agent_tool_log (agent_name, tool_name, created_at) VALUES (?, ?, ?)').run('log-agent', 'Bash', now);
+
+    const status = getAgentStatus(db, 'log-agent');
+    const tools = status.recent_tools as any[];
+    expect(tools.length).toBe(3);
+    expect(tools[0].tool_name).toBe('Bash'); // most recent first
+    expect(tools[2].tool_name).toBe('Read');
   });
 });
