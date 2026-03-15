@@ -13,6 +13,7 @@ import {
 } from './tools/channels.js';
 import { handleListPeers } from './tools/peers.js';
 import { handleGetHistory, handlePurgeHistory } from './tools/history.js';
+import { BrokerError } from './errors.js';
 
 const config = loadConfig();
 const db = initDb(config.dbPath);
@@ -22,13 +23,16 @@ const server = new McpServer({
   version: '0.1.0',
 });
 
-// Helper: wrap handler with try/catch for not_registered errors
+// Helper: wrap handler with try/catch for BrokerError
 function wrapHandler(fn: () => Record<string, unknown>) {
   try {
     const result = fn();
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   } catch (e) {
-    return { content: [{ type: 'text' as const, text: JSON.stringify({ error: 'not_registered' }) }] };
+    if (e instanceof BrokerError) {
+      return { content: [{ type: 'text' as const, text: JSON.stringify({ error: e.code, message: e.message }) }] };
+    }
+    throw e;
   }
 }
 
@@ -45,10 +49,7 @@ server.registerTool(
       metadata: z.string().optional().describe('JSON metadata'),
     },
   },
-  async ({ name, role, metadata }) => {
-    const result = handleRegister(db, config, { name, role, metadata });
-    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-  },
+  async ({ name, role, metadata }) => wrapHandler(() => handleRegister(db, config, { name, role, metadata })),
 );
 
 server.registerTool(
@@ -162,10 +163,7 @@ server.registerTool(
       role: z.string().optional().describe('Filter by role'),
     },
   },
-  async ({ role }) => {
-    const result = handleListPeers(db, config, { role });
-    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-  },
+  async ({ role }) => wrapHandler(() => handleListPeers(db, config, { role })),
 );
 
 server.registerTool(
