@@ -35,4 +35,23 @@ describe('Database', () => {
     const result = db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
     expect(result.foreign_keys).toBe(1);
   });
+
+  it('adds profile columns via migration', () => {
+    const db = createTestDb();
+    const cols = db
+      .prepare("SELECT name FROM pragma_table_info('agents')")
+      .all() as { name: string }[];
+    const colNames = cols.map((c) => c.name);
+    expect(colNames).toContain('pid');
+    expect(colNames).toContain('profile');
+    expect(colNames).toContain('spawned_by');
+  });
+
+  it('migration is idempotent', () => {
+    const db = createTestDb();
+    const cols = db
+      .prepare("SELECT name FROM pragma_table_info('agents')")
+      .all() as { name: string }[];
+    expect(cols.map((c) => c.name)).toContain('profile');
+  });
 });

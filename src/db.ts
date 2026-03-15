@@ -56,5 +56,18 @@ export function initDb(dbPath: string): Database {
   db.exec('PRAGMA busy_timeout = 5000');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
+
+  // Migrate: add profile columns if not present
+  const cols = db
+    .prepare("SELECT name FROM pragma_table_info('agents')")
+    .all() as { name: string }[];
+  const colNames = cols.map((c) => c.name);
+
+  if (!colNames.includes('profile')) {
+    db.exec('ALTER TABLE agents ADD COLUMN pid INTEGER');
+    db.exec('ALTER TABLE agents ADD COLUMN profile TEXT');
+    db.exec('ALTER TABLE agents ADD COLUMN spawned_by TEXT');
+  }
+
   return db;
 }
