@@ -2,6 +2,18 @@
 
 การเปลี่ยนแปลงสำคัญทั้งหมดของ mcp-broker บันทึกไว้ที่นี่
 
+## [0.3.2] - 2026-03-16
+
+### แก้ไข
+
+- **Race condition: double cleanup** — `stopAgent` abort แล้ว `handleAgentCompletion` ทำซ้ำ → เพิ่ม guard `getSpawnedAgents().has()` ก่อน completion handler
+- **Race condition: singleton guard gap** — ช่วง heartbeat=NULL ก่อน agent register ตัวเอง spawn ซ้ำได้ → เช็ค in-memory map ก่อน DB transaction
+- **Race condition: hook after stop** — `PostToolUse` hook เขียน DB หลัง agent stop → เช็ค `agent?.running` ก่อน log
+
+### เพิ่มใหม่
+
+- **`setting_sources`** ใน profile config — กำหนดให้ spawned agent โหลด CLAUDE.md/project settings (`['project']`)
+
 ## [0.3.1] - 2026-03-16
 
 ### เพิ่มใหม่
