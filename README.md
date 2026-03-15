@@ -2,6 +2,21 @@
 
 Multi-agent communication broker exposed as an [MCP](https://modelcontextprotocol.io/) server. Allows multiple AI agents (e.g. Claude instances) to discover each other, exchange messages, and coordinate via shared channels — all persisted in SQLite.
 
+## Table of Contents
+
+- [Why mcp-broker?](#why-mcp-broker) — ทำไมต้องมี, เทียบกับ built-in agents/teams
+- [How It Works](#how-it-works) — architecture overview
+- [Prerequisites](#prerequisites) — สิ่งที่ต้องติดตั้งก่อน
+- [Install as Claude Code Plugin](#install-as-claude-code-plugin) — วิธีติดตั้ง (plugin / manual)
+- [Usage Guide](#usage-guide) — วิธีใช้งาน (register, chat, channels, broadcast, coordinator)
+- [Use Cases](#use-cases) — 6 ตัวอย่างการใช้งานจริง
+- [Tools](#tools) — 12 MCP tools reference
+- [Configuration](#configuration) — environment variables
+- [Plugin Features](#plugin-features) — skills, coordinator agent, hooks
+- [Project Structure](#project-structure) — file layout
+- [Development](#development) — dev setup, tests, architecture, adding tools
+- [License](#license)
+
 ## Why mcp-broker?
 
 Claude Code มี Agent tool, subagents, และ teams อยู่แล้ว — แล้วทำไมต้องมี broker อีก?
