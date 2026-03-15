@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import { v4 as uuidv4 } from 'uuid';
 import type { BrokerConfig } from '../config.js';
 import type { Agent } from '../types.js';
@@ -13,7 +13,7 @@ interface RegisterParams {
 }
 
 export function handleRegister(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: RegisterParams
 ): Record<string, unknown> {
@@ -74,7 +74,7 @@ interface HeartbeatParams {
 }
 
 export function handleHeartbeat(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: HeartbeatParams
 ): Record<string, unknown> {
@@ -96,7 +96,7 @@ export function handleHeartbeat(
   return { status: 'ok', peers_online: online.cnt };
 }
 
-export function handleUnregister(db: Database.Database): Record<string, unknown> {
+export function handleUnregister(db: Database): Record<string, unknown> {
   const agent = requireAgent();
   db.prepare('UPDATE agents SET last_heartbeat = NULL WHERE id = ?').run(agent.id);
   clearAgent();

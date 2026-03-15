@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import { v4 as uuidv4 } from 'uuid';
 import type { BrokerConfig } from '../config.js';
 import type { Message } from '../types.js';
@@ -13,7 +13,7 @@ interface SendParams {
 }
 
 export function handleSendMessage(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: SendParams
 ): Record<string, unknown> {
@@ -87,7 +87,7 @@ interface PollParams {
 type MessageRow = Message & { from_name: string | null };
 
 export function handlePollMessages(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: PollParams
 ): Record<string, unknown> {

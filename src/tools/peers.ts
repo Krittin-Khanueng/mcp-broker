@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../config.js';
 import type { Agent } from '../types.js';
 import { isOnline } from '../presence.js';
@@ -6,7 +6,7 @@ import { isOnline } from '../presence.js';
 interface ListPeersParams { role?: string; }
 
 export function handleListPeers(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: ListPeersParams
 ): Record<string, unknown> {

@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../config.js';
 import { requireAgent } from '../state.js';
 import { autoHeartbeat } from '../presence.js';
@@ -11,7 +11,7 @@ interface GetHistoryParams {
 }
 
 export function handleGetHistory(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: GetHistoryParams
 ): Record<string, unknown> {
@@ -56,11 +56,12 @@ export function handleGetHistory(
 
 interface PurgeParams { before_date: string; }
 
-export function handlePurgeHistory(db: Database.Database, params: PurgeParams): Record<string, unknown> {
+export function handlePurgeHistory(db: Database, params: PurgeParams): Record<string, unknown> {
   requireAgent();
   autoHeartbeat(db);
   const cutoff = new Date(params.before_date).getTime();
   if (isNaN(cutoff)) return { error: 'invalid_date', before_date: params.before_date };
-  const result = db.prepare('DELETE FROM messages WHERE created_at < ?').run(cutoff);
-  return { deleted_count: result.changes };
+  db.prepare('DELETE FROM messages WHERE created_at < ?').run(cutoff);
+  const deleted = (db.prepare('SELECT changes() as cnt').get() as { cnt: number }).cnt;
+  return { deleted_count: deleted };
 }

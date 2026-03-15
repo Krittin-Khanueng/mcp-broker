@@ -1,4 +1,4 @@
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import { v4 as uuidv4 } from 'uuid';
 import type { BrokerConfig } from '../config.js';
 import { requireAgent } from '../state.js';
@@ -11,7 +11,7 @@ interface CreateChannelParams {
 }
 
 export function handleCreateChannel(
-  db: Database.Database,
+  db: Database,
   config: BrokerConfig,
   params: CreateChannelParams
 ): Record<string, unknown> {
@@ -34,7 +34,7 @@ export function handleCreateChannel(
 
 interface ChannelParam { channel: string; }
 
-export function handleJoinChannel(db: Database.Database, params: ChannelParam): Record<string, unknown> {
+export function handleJoinChannel(db: Database, params: ChannelParam): Record<string, unknown> {
   const agent = requireAgent();
   autoHeartbeat(db);
   const ch = db.prepare('SELECT id FROM channels WHERE name = ?').get(params.channel) as { id: string } | undefined;
@@ -45,7 +45,7 @@ export function handleJoinChannel(db: Database.Database, params: ChannelParam): 
   return { status: 'joined' };
 }
 
-export function handleLeaveChannel(db: Database.Database, params: ChannelParam): Record<string, unknown> {
+export function handleLeaveChannel(db: Database, params: ChannelParam): Record<string, unknown> {
   const agent = requireAgent();
   autoHeartbeat(db);
   const ch = db.prepare('SELECT id FROM channels WHERE name = ?').get(params.channel) as { id: string } | undefined;
@@ -54,7 +54,7 @@ export function handleLeaveChannel(db: Database.Database, params: ChannelParam):
   return { status: 'left' };
 }
 
-export function handleListChannels(db: Database.Database): Record<string, unknown> {
+export function handleListChannels(db: Database): Record<string, unknown> {
   requireAgent();
   autoHeartbeat(db);
   const channels = db.prepare(

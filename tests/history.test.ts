@@ -1,13 +1,13 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { createTestDb, registerAgent } from './helpers.js';
 import { handleGetHistory, handlePurgeHistory } from '../src/tools/history.js';
 import { handleSendMessage } from '../src/tools/messaging.js';
 import { loadConfig } from '../src/config.js';
 import { clearAgent, setAgent } from '../src/state.js';
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../src/config.js';
 
-let db: Database.Database;
+let db: Database;
 let config: BrokerConfig;
 
 beforeEach(() => {

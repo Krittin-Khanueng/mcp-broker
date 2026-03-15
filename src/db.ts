@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS agents (
@@ -50,11 +50,11 @@ CREATE TABLE IF NOT EXISTS read_cursors (
 );
 `;
 
-export function initDb(dbPath: string): Database.Database {
+export function initDb(dbPath: string): Database {
   const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('busy_timeout = 5000');
-  db.pragma('foreign_keys = ON');
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA busy_timeout = 5000');
+  db.exec('PRAGMA foreign_keys = ON');
   db.exec(SCHEMA);
   return db;
 }

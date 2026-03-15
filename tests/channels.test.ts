@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach } from 'bun:test';
 import { createTestDb, registerAgent } from './helpers.js';
 import {
   handleCreateChannel, handleJoinChannel, handleLeaveChannel, handleListChannels
 } from '../src/tools/channels.js';
 import { loadConfig } from '../src/config.js';
 import { clearAgent, setAgent } from '../src/state.js';
-import type Database from 'better-sqlite3';
+import type { Database } from 'bun:sqlite';
 import type { BrokerConfig } from '../src/config.js';
 
-let db: Database.Database;
+let db: Database;
 let config: BrokerConfig;
 
 beforeEach(() => {

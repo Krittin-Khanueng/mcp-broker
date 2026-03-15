@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from 'bun:test';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { unlinkSync } from 'fs';
@@ -24,15 +24,15 @@ describe('Database', () => {
   it('enables WAL mode on file-based DB', () => {
     const tmpPath = join(tmpdir(), `broker-test-${Date.now()}.db`);
     const db = initDb(tmpPath);
-    const result = db.pragma('journal_mode') as { journal_mode: string }[];
-    expect(result[0].journal_mode).toBe('wal');
+    const result = db.prepare('PRAGMA journal_mode').get() as { journal_mode: string };
+    expect(result.journal_mode).toBe('wal');
     db.close();
     try { unlinkSync(tmpPath); unlinkSync(tmpPath + '-wal'); unlinkSync(tmpPath + '-shm'); } catch {}
   });
 
   it('enables foreign keys', () => {
     const db = createTestDb();
-    const result = db.pragma('foreign_keys') as { foreign_keys: number }[];
-    expect(result[0].foreign_keys).toBe(1);
+    const result = db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number };
+    expect(result.foreign_keys).toBe(1);
   });
 });
